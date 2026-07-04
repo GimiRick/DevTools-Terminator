@@ -24,7 +24,7 @@
   },
   "scripts": {
     "lint": "eslint src/ examples/",
-    "test": "node test/smoke.js"
+    "test": "node test/smoke.js && node test/unit.js"
   },
   "devDependencies": {
     "eslint": "^10.6.0",
