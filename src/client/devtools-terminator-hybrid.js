@@ -29,6 +29,7 @@
   var intervals = [];
   var heartbeatInterval = null;
   var scriptContent = null;
+  var sessionId = null;
 
   function isMobile() {
     var ua = navigator.userAgent;
@@ -69,7 +70,12 @@
     return hex.join('');
   }
 
+  function isSecureContext() {
+    return typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined';
+  }
+
   function sha256(str) {
+    if (!isSecureContext()) return Promise.resolve('');
     var encoder = new TextEncoder();
     var data = encoder.encode(str);
     return crypto.subtle.digest('SHA-256', data).then(function (buf) {
@@ -78,6 +84,7 @@
   }
 
   function hmacSha256(message, secret) {
+    if (!isSecureContext()) return Promise.resolve('');
     var encoder = new TextEncoder();
     var keyData = encoder.encode(secret);
     var msgData = encoder.encode(message);
@@ -124,6 +131,17 @@
     });
   }
 
+  function fetchSessionId() {
+    if (!config.serverEndpoint) return;
+    fetch(config.serverEndpoint + '/session').then(function (res) {
+      return res.json();
+    }).then(function (data) {
+      if (data && data.sessionId) {
+        sessionId = data.sessionId;
+      }
+    }).catch(function () {});
+  }
+
   function sendHeartbeat() {
     if (terminated) return;
     if (!config.serverEndpoint) return;
@@ -147,7 +165,11 @@
         };
       });
     }).then(function (body) {
-      navigator.sendBeacon(config.serverEndpoint + '/heartbeat', JSON.stringify(body));
+      var url = config.serverEndpoint + '/heartbeat';
+      if (sessionId) url += '?session=' + encodeURIComponent(sessionId);
+      if (typeof navigator.sendBeacon === 'function') {
+        navigator.sendBeacon(url, JSON.stringify(body));
+      }
     }).catch(function () {});
   }
 
@@ -164,7 +186,11 @@
           signature: signature,
           reason: 'devtools_detected'
         });
-        navigator.sendBeacon(config.serverEndpoint + '/terminate', body);
+        var url = config.serverEndpoint + '/terminate';
+        if (sessionId) url += '?session=' + encodeURIComponent(sessionId);
+        if (typeof navigator.sendBeacon === 'function') {
+          navigator.sendBeacon(url, body);
+        }
       });
     }).catch(function () {});
   }
@@ -261,7 +287,7 @@
       configurable: false,
       enumerable: false
     });
-    console.log('%c ', obj);
+    console.log(obj);
     var check = function () {
       if (fired) {
         terminate(REASON_CODES.CONSOLE);
@@ -319,7 +345,7 @@
         }
       }
 
-      if (ctrl && (key === 'U' || key === 85)) {
+      if (ctrl && (key === 'u' || key === 'U' || key === 85)) {
         e.preventDefault();
         terminate(REASON_CODES.KEY);
         return;
@@ -361,6 +387,7 @@
     consoleDetection();
     viewportDetection();
     debuggerDetection();
+    fetchSessionId();
     startHeartbeat();
 
     global.DevToolsTerminator = {

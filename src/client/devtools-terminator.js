@@ -137,7 +137,7 @@
       configurable: false,
       enumerable: false
     });
-    console.log('%c ', obj);
+    console.log(obj);
     var check = function () {
       if (fired) {
         terminate(REASON_CODES.CONSOLE);
@@ -195,7 +195,7 @@
         }
       }
 
-      if (ctrl && (key === 'U' || key === 85)) {
+      if (ctrl && (key === 'u' || key === 'U' || key === 85)) {
         e.preventDefault();
         terminate(REASON_CODES.KEY);
         return;

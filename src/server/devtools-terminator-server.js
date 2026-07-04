@@ -96,6 +96,9 @@ function handleCreateSession(req, res) {
 function handleHeartbeat(req, res) {
   var body = '';
   req.on('data', function (chunk) { body += chunk; });
+  req.on('error', function () {
+    res.status(400).json({ error: 'Request error' });
+  });
   req.on('end', function () {
     try {
       var data = JSON.parse(body);
@@ -119,7 +122,7 @@ function handleHeartbeat(req, res) {
               sessionId: sessionId,
               reason: 'SEC_DEVTOOLS_INVALID_SIG',
               timestamp: Date.now(),
-              ip: req.ip || req.connection.remoteAddress
+              ip: req.ip || req.socket.remoteAddress
             });
           } catch (e) {}
         }
@@ -165,6 +168,9 @@ function handleHeartbeat(req, res) {
 function handleTerminate(req, res) {
   var body = '';
   req.on('data', function (chunk) { body += chunk; });
+  req.on('error', function () {
+    res.status(400).json({ error: 'Request error' });
+  });
   req.on('end', function () {
     try {
       var data = JSON.parse(body);
@@ -181,7 +187,7 @@ function handleTerminate(req, res) {
             sessionId: sessionId,
             reason: data.reason || 'SEC_DEVTOOLS_UNKNOWN',
             timestamp: Date.now(),
-            ip: req.ip || req.connection.remoteAddress
+            ip: req.ip || req.socket.remoteAddress
           });
         } catch (e) {}
       }

@@ -430,8 +430,6 @@ Contributions are welcome! All contributions must be in **JavaScript** — no Ty
 3. Make your changes
 4. Submit a pull request
 
-For detailed guidelines, see `docs/CONTRIBUTING.md`.
-
 ---
 
 ## Changelog

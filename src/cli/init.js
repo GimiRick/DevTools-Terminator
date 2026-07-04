@@ -146,7 +146,7 @@ async function main() {
   var clientFile = mode === 'hybrid' ? FILES.hybrid : FILES.client;
   var copied = [];
 
-  var clientDest = path.join(targetDir, clientFile.label === 'Client-Only Detection Library' ? 'devtools-terminator.js' : 'devtools-terminator-hybrid.js');
+  var clientDest = path.join(targetDir, mode === 'hybrid' ? 'devtools-terminator-hybrid.js' : 'devtools-terminator.js');
 
   if (skipPrompts || (await confirmOverwrite(clientDest))) {
     copyFile(clientFile.src, clientDest);
