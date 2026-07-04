@@ -461,7 +461,13 @@ The payload is signed with **HMAC-SHA256** using a shared secret. The server ver
 
 **If a heartbeat doesn't arrive within 45 seconds, or if the server receives a termination beacon, the session is marked as terminated.** All subsequent API requests from that session get a **403 Forbidden** response. The server keeps a list of terminated sessions and checks every incoming request against it.
 
-**However**, the shared secret is embedded in the client code. So if someone modifies the client script, they still have the secret and can forge valid heartbeats. The server cannot tell the difference. This stops casual tampering but not a determined attacker.
+**However**, the shared secret is embedded in the client code. Since it is a symmetric key (HMAC-SHA256) living in the browser, it is not a secret. A determined attacker can:
+
+- Search the client JS for the secret string or set a breakpoint where the HMAC is generated and read the key from memory
+- Write a short script using `requests` and `hashlib` to generate valid HMAC signatures
+- Route their traffic through a proxy (Burp Suite, mitmproxy, etc.) and feed valid heartbeats to the server
+
+The server cannot cryptographically tell the difference between a real browser and a script forging heartbeats. Hybrid mode stops users who open DevTools, but **it does not protect against a proxy-level attacker.**
 
 ---
 
