@@ -18,8 +18,6 @@ var LOG_LEVEL_MAP = { error: 0, warn: 1, info: 2, debug: 3 };
 var sessions = {};
 var terminatedSessions = {};
 var cleanupTimer = null;
-var config = null;
-var logger = null;
 
 function timingSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
@@ -29,7 +27,17 @@ function timingSafeEqual(a, b) {
 
 function createRateLimiter(windowMs, maxHits) {
   var buckets = {};
+  var lastCleanup = Date.now();
   return function (key) {
+    if (Date.now() - lastCleanup > windowMs) {
+      var cleanupNow = Date.now();
+      for (var k in buckets) {
+        if (buckets.hasOwnProperty(k) && cleanupNow >= buckets[k].resetAt) {
+          delete buckets[k];
+        }
+      }
+      lastCleanup = cleanupNow;
+    }
     var now = Date.now();
     var bucket = buckets[key];
     if (!bucket || now >= bucket.resetAt) {
@@ -118,27 +126,29 @@ function extractSessionId(req) {
 }
 
 function createMiddleware(userConfig) {
-  config = validateConfig(userConfig);
-  logger = createLogger(config);
+  var cfg = validateConfig(userConfig);
+  var log = createLogger(cfg);
 
-  var heartbeatLimiter = createRateLimiter(config.rateLimitWindow, config.rateLimitHeartbeat);
-  var terminateLimiter = createRateLimiter(config.rateLimitWindow, config.rateLimitTerminate);
-  var sessionLimiter = createRateLimiter(config.rateLimitWindow, config.rateLimitSession);
+  var heartbeatLimiter = createRateLimiter(cfg.rateLimitWindow, cfg.rateLimitHeartbeat);
+  var terminateLimiter = createRateLimiter(cfg.rateLimitWindow, cfg.rateLimitTerminate);
+  var sessionLimiter = createRateLimiter(cfg.rateLimitWindow, cfg.rateLimitSession);
 
   if (!cleanupTimer) {
-    cleanupTimer = setInterval(cleanupStaleSessions, config.cleanupInterval);
+    cleanupTimer = setInterval(function () {
+      cleanupStaleSessions(cfg.staleThreshold, log);
+    }, cfg.cleanupInterval);
     if (cleanupTimer.unref) cleanupTimer.unref();
   }
 
-  logger.info('middleware_initialized', {
-    rateLimitWindow: config.rateLimitWindow,
-    rateLimitHeartbeat: config.rateLimitHeartbeat,
-    rateLimitTerminate: config.rateLimitTerminate,
-    rateLimitSession: config.rateLimitSession,
-    maxBodySize: config.maxBodySize,
-    logLevel: config.logLevel,
-    staleThreshold: config.staleThreshold,
-    replayWindow: config.replayWindow
+  log.info('middleware_initialized', {
+    rateLimitWindow: cfg.rateLimitWindow,
+    rateLimitHeartbeat: cfg.rateLimitHeartbeat,
+    rateLimitTerminate: cfg.rateLimitTerminate,
+    rateLimitSession: cfg.rateLimitSession,
+    maxBodySize: cfg.maxBodySize,
+    logLevel: cfg.logLevel,
+    staleThreshold: cfg.staleThreshold,
+    replayWindow: cfg.replayWindow
   });
 
   return function (req, res, next) {
@@ -149,27 +159,27 @@ function createMiddleware(userConfig) {
       var hbReset = heartbeatLimiter(ip);
       if (hbReset) {
         res.set('Retry-After', Math.ceil((hbReset - Date.now()) / 1000));
-        logger.warn('rate_limit_exceeded', { endpoint: '/heartbeat', ip: ip });
+        log.warn('rate_limit_exceeded', { endpoint: '/heartbeat', ip: ip });
         return res.status(429).json({ error: 'Too many requests', retryAfter: hbReset });
       }
-      return handleHeartbeat(req, res);
+      return handleHeartbeat(req, res, cfg, log);
     }
 
     if (path === '/terminate' && req.method === 'POST') {
       var tReset = terminateLimiter(ip);
       if (tReset) {
         res.set('Retry-After', Math.ceil((tReset - Date.now()) / 1000));
-        logger.warn('rate_limit_exceeded', { endpoint: '/terminate', ip: ip });
+        log.warn('rate_limit_exceeded', { endpoint: '/terminate', ip: ip });
         return res.status(429).json({ error: 'Too many requests', retryAfter: tReset });
       }
-      return handleTerminate(req, res);
+      return handleTerminate(req, res, cfg, log);
     }
 
     if (path === '/session' && req.method === 'GET') {
       var sReset = sessionLimiter(ip);
       if (sReset) {
         res.set('Retry-After', Math.ceil((sReset - Date.now()) / 1000));
-        logger.warn('rate_limit_exceeded', { endpoint: '/session', ip: ip });
+        log.warn('rate_limit_exceeded', { endpoint: '/session', ip: ip });
         return res.status(429).json({ error: 'Too many requests', retryAfter: sReset });
       }
       return handleCreateSession(req, res);
@@ -198,17 +208,18 @@ function handleCreateSession(req, res) {
   res.json({ sessionId: sessionId });
 }
 
-function handleHeartbeat(req, res) {
+function handleHeartbeat(req, res, cfg, log) {
   var body = '';
   var aborted = false;
-  var maxSize = config.maxBodySize;
+  var maxSize = cfg.maxBodySize;
   var ip = req.ip || req.socket.remoteAddress;
   req.on('data', function (chunk) {
     if (aborted) return;
     body += chunk;
     if (body.length > maxSize) {
       aborted = true;
-      logger.warn('request_body_too_large', { endpoint: '/heartbeat', ip: ip, size: body.length, maxSize: maxSize });
+      log.warn('request_body_too_large', { endpoint: '/heartbeat', ip: ip, size: body.length, maxSize: maxSize });
+      body = '';
       res.status(413).json({ error: 'Request entity too large' });
     }
   });
@@ -229,15 +240,15 @@ function handleHeartbeat(req, res) {
       var payload = data.fingerprint + ':' + (data.scriptHash || '') + ':' + data.timestamp;
 
       var expectedSig = crypto
-        .createHmac('sha256', config.sharedSecret)
+        .createHmac('sha256', cfg.sharedSecret)
         .update(payload)
         .digest('hex');
 
       if (!timingSafeEqual(data.signature, expectedSig)) {
-        logger.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/heartbeat' });
-        if (config.onTermination) {
+        log.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/heartbeat' });
+        if (cfg.onTermination) {
           try {
-            config.onTermination({
+            cfg.onTermination({
               sessionId: sessionId,
               reason: 'SEC_DEVTOOLS_INVALID_SIG',
               timestamp: Date.now(),
@@ -250,8 +261,8 @@ function handleHeartbeat(req, res) {
 
       var now = Date.now();
       var payloadAge = now - data.timestamp;
-      if (payloadAge > config.replayWindow || payloadAge < -config.replayWindow) {
-        logger.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
+      if (payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
+        log.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
         return res.status(403).json({ error: 'Payload expired' });
       }
 
@@ -268,9 +279,9 @@ function handleHeartbeat(req, res) {
         sessions[sessionId].scriptHash = data.scriptHash || null;
       }
 
-      if (config.onHeartbeat) {
+      if (cfg.onHeartbeat) {
         try {
-          config.onHeartbeat({
+          cfg.onHeartbeat({
             sessionId: sessionId,
             fingerprint: data.fingerprint,
             timestamp: now
@@ -285,17 +296,18 @@ function handleHeartbeat(req, res) {
   });
 }
 
-function handleTerminate(req, res) {
+function handleTerminate(req, res, cfg, log) {
   var body = '';
   var aborted = false;
-  var maxSize = config.maxBodySize;
+  var maxSize = cfg.maxBodySize;
   var ip = req.ip || req.socket.remoteAddress;
   req.on('data', function (chunk) {
     if (aborted) return;
     body += chunk;
     if (body.length > maxSize) {
       aborted = true;
-      logger.warn('request_body_too_large', { endpoint: '/terminate', ip: ip, size: body.length, maxSize: maxSize });
+      log.warn('request_body_too_large', { endpoint: '/terminate', ip: ip, size: body.length, maxSize: maxSize });
+      body = '';
       res.status(413).json({ error: 'Request entity too large' });
     }
   });
@@ -316,15 +328,15 @@ function handleTerminate(req, res) {
       var payload = data.fingerprint + '::' + data.timestamp;
 
       var expectedSig = crypto
-        .createHmac('sha256', config.sharedSecret)
+        .createHmac('sha256', cfg.sharedSecret)
         .update(payload)
         .digest('hex');
 
       if (!timingSafeEqual(data.signature, expectedSig)) {
-        logger.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/terminate' });
-        if (config.onTermination) {
+        log.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/terminate' });
+        if (cfg.onTermination) {
           try {
-            config.onTermination({
+            cfg.onTermination({
               sessionId: sessionId,
               reason: 'SEC_DEVTOOLS_INVALID_SIG',
               timestamp: Date.now(),
@@ -337,19 +349,19 @@ function handleTerminate(req, res) {
 
       var now = Date.now();
       var payloadAge = now - data.timestamp;
-      if (payloadAge > config.replayWindow || payloadAge < -config.replayWindow) {
-        logger.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
+      if (payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
+        log.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
         return res.status(403).json({ error: 'Payload expired' });
       }
 
       if (sessions[sessionId]) {
         sessions[sessionId].terminated = true;
       }
-      terminatedSessions[sessionId] = true;
+      terminatedSessions[sessionId] = Date.now();
 
-      if (config.onTermination) {
+      if (cfg.onTermination) {
         try {
-          config.onTermination({
+          cfg.onTermination({
             sessionId: sessionId,
             reason: data.reason || 'SEC_DEVTOOLS_UNKNOWN',
             timestamp: now,
@@ -365,9 +377,9 @@ function handleTerminate(req, res) {
   });
 }
 
-function cleanupStaleSessions() {
+function cleanupStaleSessions(threshold, log) {
   var now = Date.now();
-  var threshold = config ? config.staleThreshold : STALE_THRESHOLD;
+  var staleThreshold = threshold || STALE_THRESHOLD;
   var cleaned = [];
 
   for (var id in sessions) {
@@ -375,15 +387,21 @@ function cleanupStaleSessions() {
       if (terminatedSessions[id]) {
         delete sessions[id];
         cleaned.push({ sessionId: id, reason: 'terminated' });
-      } else if (now - sessions[id].lastHeartbeat > threshold) {
+      } else if (now - sessions[id].lastHeartbeat > staleThreshold) {
         delete sessions[id];
         cleaned.push({ sessionId: id, reason: 'stale' });
       }
     }
   }
 
-  if (cleaned.length > 0 && logger) {
-    logger.debug('sessions_cleaned', { count: cleaned.length, sessions: cleaned });
+  for (var tid in terminatedSessions) {
+    if (terminatedSessions.hasOwnProperty(tid) && now - terminatedSessions[tid] > staleThreshold) {
+      delete terminatedSessions[tid];
+    }
+  }
+
+  if (cleaned.length > 0 && log) {
+    log.debug('sessions_cleaned', { count: cleaned.length, sessions: cleaned });
   }
 }
 

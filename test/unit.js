@@ -152,12 +152,12 @@ console.log('::group::Cross-file consistency');
 var hybridCode = fs.readFileSync(path.join(ROOT, 'src', 'client', 'devtools-terminator-hybrid.js'), 'utf-8');
 var pkg = require(path.join(ROOT, 'package.json'));
 
-// Version consistency: client file, hybrid file, and package.json should all say 0.1.0
-assert(clientCode.indexOf("'0.1.0'") !== -1 || clientCode.indexOf('"0.1.0"') !== -1,
-  'client file has version 0.1.0');
-assert(hybridCode.indexOf("'0.1.0'") !== -1 || hybridCode.indexOf('"0.1.0"') !== -1,
-  'hybrid file has version 0.1.0');
-assert(pkg.version === '0.1.0', 'package.json version is 0.1.0');
+// Version consistency: client file, hybrid file, and package.json should all say 0.1.1
+assert(clientCode.indexOf("'0.1.1'") !== -1 || clientCode.indexOf('"0.1.1"') !== -1,
+  'client file has version 0.1.1');
+assert(hybridCode.indexOf("'0.1.1'") !== -1 || hybridCode.indexOf('"0.1.1"') !== -1,
+  'hybrid file has version 0.1.1');
+assert(pkg.version === '0.1.1', 'package.json version is 0.1.1');
 
 // Termination URL consistency
 assert(clientCode.indexOf("'/terminated.html'") !== -1, 'client default terminationURL is /terminated.html');

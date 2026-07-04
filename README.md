@@ -2,7 +2,7 @@
 
 > A lightweight browser security library that detects and prevents Developer Tools access by terminating the session.
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Version](https://img.shields.io/badge/version-0.1.1-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![npm](https://img.shields.io/npm/v/devtools-terminator)](https://www.npmjs.com/package/devtools-terminator)
 ![npm weekly](https://img.shields.io/npm/dw/devtools-terminator)
@@ -577,19 +577,18 @@ For detailed guidelines, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Changelog
 
-### [0.1.0] — 2026-07-04
+### [0.1.1] — 2026-07-05
 
-- Initial release
-- Client-Only detection mode with three independent detection mechanisms
-- Hybrid mode with HMAC-SHA256 cryptographic heartbeat system
-- Keyboard shortcut interception and UI protection
-- Full storage wipe and Service Worker cleanup
-- Express server middleware with session validation and rate limiting
 - Per-IP rate limiting on heartbeat, terminate, and session endpoints
 - Request body size limits to prevent OOM attacks
 - Structured JSON logging with level filtering and custom logger support
-- CLI init command for npm users
-- MIT License
+- Server middleware config/logger isolation between instances
+- Memory leak fixes (terminated session cleanup, rate limiter bucket cleanup)
+- Client debugger detection compatible with environments missing `performance`
+- Request body freed immediately after size limit exceeded
+- `--dir` flag in CLI no longer picks up the next flag as a directory name
+
+
 
 For full version history, see `docs/CHANGELOG.md`.
 

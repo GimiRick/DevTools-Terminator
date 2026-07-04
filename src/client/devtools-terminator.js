@@ -1,7 +1,7 @@
 (function (global) {
   'use strict';
 
-  var VERSION = '0.1.0';
+  var VERSION = '0.1.1';
 
   var REASON_CODES = {
     CONSOLE: 'SEC_DEVTOOLS_CONSOLE_001',
@@ -162,11 +162,13 @@
   }
 
   function debuggerDetection() {
+    var perf = typeof performance !== 'undefined' ? performance : null;
+    if (!perf) return;
     var check = function () {
       if (terminated) return;
-      var start = performance.now();
+      var start = perf.now();
       debugger;
-      var elapsed = performance.now() - start;
+      var elapsed = perf.now() - start;
       if (elapsed > 100) {
         terminate(REASON_CODES.DEBUGGER);
       }

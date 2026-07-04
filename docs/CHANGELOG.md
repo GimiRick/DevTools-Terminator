@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.1] — 2026-07-05
+
+### Added
+- Per-IP rate limiting on heartbeat, terminate, and session endpoints
+- Request body size limits to prevent OOM attacks (configurable, default 10KB)
+- Structured JSON logging with level filtering (`error`/`warn`/`info`/`debug`) and custom logger support
+- Server middleware configuration docs with all options documented
+
+### Fixed
+- Server middleware `config`/`logger` no longer shared across middleware instances — each `createMiddleware()` call now has isolated configuration
+- `terminatedSessions` store no longer leaks memory — entries now cleaned up when stale
+- Client `debuggerDetection()` no longer throws `ReferenceError` when `performance` global is unavailable
+- Rate limiter internal bucket cache no longer leaks memory — periodic cleanup of expired entries
+- Request body accumulation stops immediately after exceeding `maxBodySize`, preventing memory waste
+- CLI `--dir` flag no longer interprets the next flag as a directory path
+
 ## [0.1.0] — 2026-07-04
 
 ### Added

@@ -126,8 +126,11 @@ async function main() {
 
   var targetDir = process.cwd();
   var dirArgIndex = args.indexOf('--dir');
-  if (dirArgIndex !== -1 && args[dirArgIndex + 1]) {
-    targetDir = path.resolve(targetDir, args[dirArgIndex + 1]);
+  if (dirArgIndex !== -1) {
+    var dirVal = args[dirArgIndex + 1];
+    if (dirVal && !dirVal.startsWith('-')) {
+      targetDir = path.resolve(targetDir, dirVal);
+    }
   }
 
   var skipPrompts = args.includes('--yes') || args.includes('-y');
