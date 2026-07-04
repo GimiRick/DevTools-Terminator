@@ -17,7 +17,7 @@
 
 ```html
 <script>
-  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+  window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
     terminationURL: '/terminated.html'
   };
 </script>

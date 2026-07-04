@@ -67,10 +67,10 @@
           document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/';
           document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=' + window.location.hostname;
           var hostParts = window.location.hostname.split('.');
-          if (hostParts.length > 2) {
-            var domainParts = [hostParts[hostParts.length - 1]];
-            for (var j = hostParts.length - 2; j >= 1; j--) {
-              domainParts.unshift(hostParts[j]);
+          var domainParts = [];
+          for (var j = hostParts.length - 1; j >= 0; j--) {
+            domainParts.unshift(hostParts[j]);
+            if (domainParts.length >= 2) {
               document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=.' + domainParts.join('.');
             }
           }
@@ -183,7 +183,7 @@
       var ctrl = e.ctrlKey || e.metaKey;
       var shift = e.shiftKey;
 
-      if (key === 'F12' || key === 112) {
+      if (key === 'F12' || key === 123) {
         e.preventDefault();
         terminate(REASON_CODES.KEY);
         return;

@@ -11,7 +11,7 @@
 /* --- Client-Only Mode --- */
 
 // 1. Define configuration BEFORE loading the script
-window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
   terminationURL: '/terminated.html',
   checkInterval: 1000,
   windowSizeCheck: true,
@@ -49,7 +49,7 @@ function onLogout() {
 /* --- Hybrid Mode --- */
 
 // 1. Configure for hybrid mode
-window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
   terminationURL: '/terminated.html',
   checkInterval: 1000,
   hybridMode: true,

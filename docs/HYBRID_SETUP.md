@@ -44,7 +44,7 @@ app.use('/api/devtools', middleware);
 
 ```html
 <script>
-  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+  window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
     hybridMode: true,
     serverEndpoint: '/api/devtools',
     sharedSecret: 'your-shared-secret-key',

@@ -2,7 +2,6 @@
 
 var fs = require('fs');
 var path = require('path');
-var vm = require('vm');
 
 var ROOT = path.resolve(__dirname, '..');
 var passed = 0;
