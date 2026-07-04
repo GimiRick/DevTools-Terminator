@@ -65,7 +65,10 @@ All Client-Only features, plus:
 - **Server-enforced termination** — terminated sessions cannot access protected routes
 - **Termination beacon** — fire-and-forget notification via Navigator Beacon API
 - **Audit logging** — server-side security event hooks for custom alerting
-- **Memory management** — automatic cleanup of stale sessions
+- **Memory management** — automatic cleanup of stale and terminated sessions
+- **Rate limiting** — per-IP throttling on heartbeat, terminate, and session endpoints
+- **Request body limits** — configurable max body size prevents OOM attacks
+- **Structured logging** — JSON-formatted logs with levels and custom logger support
 
 ---
 
@@ -338,7 +341,12 @@ import 'devtools-terminator/hybrid';
 const devtoolsMiddleware = require('devtools-terminator/server');
 
 app.use('/api/devtools', devtoolsMiddleware({
-  sharedSecret: process.env.DEVTOLS_SECRET
+  sharedSecret: process.env.DEVTOLS_SECRET,
+  rateLimitHeartbeat: 60,
+  rateLimitTerminate: 10,
+  rateLimitSession: 30,
+  maxBodySize: 10240,
+  logLevel: 'info'
 }));
 ```
 
@@ -420,6 +428,34 @@ Configure the library by defining `window.__DEVTOLS_TERMINATOR_CONFIG__` before 
   };
 </script>
 ```
+
+### Server Middleware Configuration
+
+Configure the server middleware by passing options to `devtoolsTerminator()`:
+
+```javascript
+const devtoolsMiddleware = devtoolsTerminator({
+  sharedSecret: process.env.DEVTOLS_SECRET,
+  rateLimitHeartbeat: 60,    // 60 heartbeats/min per IP
+  rateLimitTerminate: 10,    // 10 terminate beacons/min per IP
+  rateLimitSession: 30,      // 30 session creations/min per IP
+  maxBodySize: 10240,        // 10KB max request body
+  logLevel: 'info',          // error | warn | info | debug
+  logger: null               // custom logger function (receives structured entries)
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `rateLimitWindow` | `number` | `60000` | Rate limit window in ms |
+| `rateLimitHeartbeat` | `number` | `60` | Max heartbeats per window per IP |
+| `rateLimitTerminate` | `number` | `10` | Max termination beacons per window per IP |
+| `rateLimitSession` | `number` | `30` | Max session creations per window per IP |
+| `maxBodySize` | `number` | `10240` | Maximum request body size in bytes |
+| `logLevel` | `string` | `'info'` | Log level: `error`, `warn`, `info`, `debug` |
+| `logger` | `function` | `null` | Custom logger — receives `{time, level, msg, module, ...}` |
+
+When no custom logger is provided, the middleware writes JSON-formatted log entries to stdout (info, debug) and stderr (warn, error).
 
 ---
 
@@ -511,6 +547,8 @@ DevTools Terminator is a **deterrent layer**, not a replacement for server-side 
 - Casual users pressing F12 or right-clicking to inspect
 - Users opening the browser console out of curiosity
 - Automated scrapers that rely on DevTools APIs
+- Brute-force and DoS attacks against server endpoints (via rate limiting)
+- Memory exhaustion via oversized request bodies (via body size limits)
 
 **What it does NOT protect against:**
 
@@ -546,7 +584,10 @@ For detailed guidelines, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Hybrid mode with HMAC-SHA256 cryptographic heartbeat system
 - Keyboard shortcut interception and UI protection
 - Full storage wipe and Service Worker cleanup
-- Express server middleware with session validation
+- Express server middleware with session validation and rate limiting
+- Per-IP rate limiting on heartbeat, terminate, and session endpoints
+- Request body size limits to prevent OOM attacks
+- Structured JSON logging with level filtering and custom logger support
 - CLI init command for npm users
 - MIT License
 
