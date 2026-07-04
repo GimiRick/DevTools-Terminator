@@ -102,37 +102,94 @@ npm install
 
 This installs the Express dependency required for Hybrid server mode. The client library itself has no dependencies.
 
-### Project Structure
+### Project Architecture
 
 ```text
-devtools-terminator/
-├── src/
-│   ├── client/
-│   │   ├── devtools-terminator.js         # Client-Only library
-│   │   └── devtools-terminator-hybrid.js  # Hybrid client library
-│   ├── server/
-│   │   └── devtools-terminator-server.js  # Express middleware
-│   └── cli/
-│       └── init.js                        # CLI init script
-├── public/
-│   └── terminated.html                    # Termination page
-├── examples/
-│   ├── demo.html                          # Client-Only demo
-│   ├── server-example.js                  # Hybrid server demo
-│   └── usage-demo.js                      # Usage patterns
-├── docs/
-│   ├── GETTING_STARTED.md                 # Quick start guide
-│   ├── HYBRID_SETUP.md                    # Hybrid setup guide
-│   ├── WHICH_FILES.md                     # File reference
-│   ├── SECURITY.md                        # Security considerations
-│   └── CHANGELOG.md                       # Version history
-├── .env.example                           # Environment template
-├── package.json
-├── README.md
-├── LICENSE
-├── SECURITY.md                            # Security policy
-├── CONTRIBUTING.md                        # Contribution guidelines
-└── CODE_OF_CONDUCT.md                     # Code of conduct
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          DEVTOLS TERMINATOR                                 │
+│               Browser Security & Anti-DevTools Library                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+          ┌─────────────────────────┼─────────────────────────────┐
+          │                         │                             │
+          ▼                         ▼                             ▼
+┌───────────────────────┐   ┌───────────────────┐     ┌──────────────────────────┐
+│   CLIENT-ONLY MODE    │   │   HYBRID MODE     │     │   SERVER MIDDLEWARE      │
+│  (devtools-terminator)│   │(hybrid variant)   │     │  (devtools-terminator-   │
+│                       │   │                   │     │   server.js)             │
+│   ┌───────────────┐   │   │  ┌────────────┐   │     │                          │
+│   │ Detection     │   │   │  │ Detection  │   │     │  ┌────────────────────┐  │
+│   │ Mechanisms    │   │   │  │ Mechanisms │   │     │  │ Routes             │  │
+│   │               │   │   │  │ (same 4)   │   │     │  │                    │  │
+│   │ • Console     │   │   │  └─────┬──────┘   │     │  │ POST /heartbeat    │  │
+│   │   Getter Trap │   │   │        │          │     │  │ POST /terminate    │  │
+│   │ • Viewport    │   │   │        ▼          │     │  │ GET  /session      │  │
+│   │   Diff (>200) │   │   │  ┌─────────────┐  │     │  │ 403 Check (all)    │  │
+│   │ • Debugger    │   │   │  │ Heartbeat   │  │     │  └────────────────────┘  │
+│   │  Timing(100ms)│   │   │  │ System      │  │     │                          │
+│   │ • Keyboard    │   │   │  │             │  │     │  ┌────────────────────┐  │
+│   │   Interception│   │   │  │ HMAC-SHA256 │  │     │  │ Session Store      │  │
+│   └───────┬───────┘   │   │  │ Fingerprint │  │     │  │ (in-memory)        │  │
+│           │           │   │  │ Script Hash │  │     │  │                    │  │
+│           ▼           │   │  │ 30s interval│  │     │  │ lastHeartbeat      │  │
+│  ┌───────────────┐    │   │  └──────┬──────┘  │     │  │ terminated: bool   │  │
+│  │ Termination   │    │   │         │         │     │  │ fingerprint        │  │
+│  │ Sequence      │    │   │         ▼         │     │  │ scriptHash         │  │
+│  │               │    │   │  ┌─────────────┐  │     │  └────────────────────┘  │
+│  │ 1. Atomic flag│    │   │  │ Beacon      │  │     │                          │
+│  │ 2. Clear      │    │   │  │ (sendBeacon)│  │     │  ┌────────────────────┐  │
+│  │    intervals  │    │   │  │ fire-and-   │  │     │  │ Security Hooks     │  │
+│  │ 3. Callback   │    │   │  │ forget      │  │     │  │                    │  │
+│  │ 4. Wipe all   │    │   │  └─────────────┘  │     │  │ onTermination()    │  │
+│  │    storage    │    │   └────────┬──────────┘     │  │ onHeartbeat()      │  │
+│  │ 5. redirect   │    │            │                │  └────────────────────┘  │
+│  │    (replace)  │    │            │                │                          │
+│  └───────┬───────┘    │            │                │  ┌────────────────────┐  │
+│          │            │            └────────────────┼▶│ Production Guard   │  │  
+│          ▼            │                             │  │ (rejects default   │  │
+│  ┌───────────────┐    │                             │  │  secret in prod)   │  │
+│  │ Storage Wipe  │    │                             │  └────────────────────┘  │
+│  │               │    │                             │                          │
+│  │ • localStorage│    │  ┌───────────────────┐      │  ┌────────────────────┐  │
+│  │ • session     │    │  │   CLI INIT        │      │  │ Cleanup Routine    │  │
+│  │   Storage     │    │  │ (npx devtools-    │      │  │ (60s interval,     │  │
+│  │ • Cookies     │    │  │  terminator init) │      │  │  stale >45s)       │  │
+│  │ • IndexedDB   │    │  │                   │      │  └────────────────────┘  │
+│  │ • CacheStorage│    │  │ --client (default)│      │                          │
+│  │ • Service     │    │  │ --hybrid          │      └──────────────────────────┘
+│  │   Workers     │    │  │ --dir <path>      │
+│  └───────────────┘    │  │ --yes             │
+│                       │  └───────────────────┘
+└───────────────────────┘
+                                    │
+          ┌─────────────────────────┼─────────────────────────────┐
+          │                         │                             │
+          ▼                         ▼                             ▼
+┌─────────────────────┐   ┌──────────────────┐   ┌──────────────────────────┐
+│  PUBLIC / STATIC    │   │    EXAMPLES      │   │       DOCS               │
+│                     │   │                  │   │                          │
+│  terminated.html    │   │ demo.html        │   │ GETTING_STARTED.md       │
+│  (termination page) │   │ server-example.js│   │ HYBRID_SETUP.md          │
+│                     │   │ usage-demo.js    │   │ WHICH_FILES.md           │
+│                     │   │                  │   │ SECURITY.md              │
+│                     │   │                  │   │ CHANGELOG.md             │
+└─────────────────────┘   └──────────────────┘   └──────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        CONFIGURATION LAYER                                  │
+│          window.__DEVTOLS_TERMINATOR_CONFIG__ (frozen after init)           │
+│                                                                             │
+│  terminationURL  │  checkInterval  │  windowSizeCheck  │  blockKeyboard     │
+│  disableOnMobile │  onTermination  │  hybridMode       │  serverEndpoint    │
+│  sharedSecret    │                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        PUBLIC API                                           │
+│           window.DevToolsTerminator (frozen read-only)                      │
+│                                                                             │
+│  version  │  isTerminated()  │  terminate()  │  config                      │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Run the Client-Only Demo
