@@ -236,7 +236,9 @@ function cleanupStaleSessions() {
 
   for (var id in sessions) {
     if (sessions.hasOwnProperty(id)) {
-      if (!terminatedSessions[id] && now - sessions[id].lastHeartbeat > threshold) {
+      if (terminatedSessions[id]) {
+        delete sessions[id];
+      } else if (now - sessions[id].lastHeartbeat > threshold) {
         delete sessions[id];
       }
     }

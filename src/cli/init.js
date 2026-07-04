@@ -93,14 +93,14 @@ function printSuccess(copied) {
   console.log('  For Hybrid setup:');
   console.log('    1. Configure your Express server with the middleware');
   console.log('    2. Add the hybrid script tag with config:');
-  console.log('       <script data-devtools-terminator>');
+  console.log('       <script>');
   console.log('       window.__DEVTOLS_TERMINATOR_CONFIG__ = {');
   console.log('         hybridMode: true,');
   console.log('         serverEndpoint: "/api/devtools",');
   console.log('         sharedSecret: "your-secret-key"');
   console.log('       };');
   console.log('       </script>');
-  console.log('       <script src="/path/to/devtools-terminator-hybrid.js"></script>');
+  console.log('       <script src="/path/to/devtools-terminator-hybrid.js" data-devtools-terminator></script>');
   console.log('');
   console.log('  See README.md or docs/ for detailed instructions.\n');
 }

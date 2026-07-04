@@ -65,7 +65,7 @@ window.__DEVTOLS_TERMINATOR_CONFIG__ = {
 };
 
 // 2. Load hybrid script
-//    <script src="path/to/devtools-terminator-hybrid.js"></script>
+//    <script src="path/to/devtools-terminator-hybrid.js" data-devtools-terminator></script>
 
 /* --- Server-Side Middleware (Node.js/Express) --- */
 
