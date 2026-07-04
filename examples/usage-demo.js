@@ -2,7 +2,7 @@
 
 /* ------------------------------------------------------------------
    DevTools Terminator — JavaScript Usage Patterns Demo
-   
+
    This file demonstrates how to use the DevTools Terminator library
    programmatically in the browser. It is not a runnable script but
    a reference for developers.
@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // 4. Manually trigger termination (e.g., for a logout button)
+// eslint-disable-next-line no-unused-vars
 function onLogout() {
   if (window.DevToolsTerminator) {
     window.DevToolsTerminator.terminate();

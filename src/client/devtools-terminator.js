@@ -67,8 +67,8 @@
           document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=' + document.domain;
           var hostParts = document.domain.split('.');
           if (hostParts.length > 2) {
-            var domainParts = [];
-            for (var j = hostParts.length - 1; j >= 1; j--) {
+            var domainParts = [hostParts[hostParts.length - 1]];
+            for (var j = hostParts.length - 2; j >= 1; j--) {
               domainParts.unshift(hostParts[j]);
               document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=.' + domainParts.join('.');
             }

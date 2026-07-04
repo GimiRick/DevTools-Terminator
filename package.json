@@ -20,7 +20,15 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "lint": "eslint src/ examples/",
+    "test": "node test/smoke.js"
+  },
+  "devDependencies": {
+    "eslint": "^10.6.0",
+    "globals": "^16.0.0"
   },
   "dependencies": {
     "express": "^5.2.1"
