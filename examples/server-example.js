@@ -53,7 +53,7 @@ app.listen(PORT, function () {
   console.log('Server running at http://localhost:' + PORT);
   console.log('');
   console.log('To test with the hybrid client:');
-  console.log('  1. Open examples/demo-hybrid.html in a browser');
+  console.log('  1. Create an HTML page with the hybrid client script');
   console.log('  2. Configure the script to point to this server');
   console.log('');
   console.log('IMPORTANT: Change the shared secret for production use.');

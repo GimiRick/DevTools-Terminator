@@ -119,7 +119,7 @@
             All local data has been cleared.
         </p>
         <div class="warning">This action has been logged</div>
-        <div class="code">Error Code: SEC_DEVTOOLS_001</div>
+        <div class="code">Error Code: SEC_DEVTOOLS_TERMINATED</div>
     </div>
     
     <script>
@@ -131,9 +131,22 @@
                 localStorage.clear();
                 sessionStorage.clear();
                 
-                // Clear cookies
+                // Clear cookies (root path + domain + subdomain variants)
                 document.cookie.split(';').forEach(function(c) {
-                    document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date(0).toUTCString() + ';path=/');
+                    var eqIdx = c.indexOf('=');
+                    var name = eqIdx > -1 ? c.substr(0, eqIdx).trim() : c.trim();
+                    if (name) {
+                        document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/';
+                        document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=' + document.domain;
+                        var hostParts = document.domain.split('.');
+                        if (hostParts.length > 2) {
+                            var domainParts = [];
+                            for (var j = hostParts.length - 1; j >= 1; j--) {
+                                domainParts.unshift(hostParts[j]);
+                                document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=.' + domainParts.join('.');
+                            }
+                        }
+                    }
                 });
                 
                 // Unregister service workers
