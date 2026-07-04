@@ -28,15 +28,53 @@ function fileExists(p) {
 
 // --- Server deep unit tests ---
 console.log('');
-console.log('::group::Server module - timingSafeEqual');
+console.log('::group::Server module - timingSafeEqual resilience');
 
 var serverMod = require(path.join(ROOT, 'src', 'server', 'devtools-terminator-server.js'));
 
-var sig = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
-var sig2 = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
-var sig3 = '0000000000000000000000000000000000000000000000000000000000000000';
-assert(sig === sig2, 'test sigs are equal string');
-assert(sig !== sig3, 'test sigs are different');
+var mw = serverMod({ sharedSecret: 'testsecret', logLevel: 'error' });
+var crashed = false;
+
+var mockReq = {
+  path: '/heartbeat',
+  method: 'POST',
+  ip: '127.0.0.1',
+  headers: {},
+  query: {},
+  socket: { remoteAddress: '127.0.0.1' },
+  _cbs: {},
+  on: function(event, cb) {
+    this._cbs[event] = cb;
+  }
+};
+
+var resStatus = null;
+var mockRes = {
+  set: function() {},
+  status: function(s) { resStatus = s; return this; },
+  json: function() {}
+};
+
+try {
+  mw(mockReq, mockRes, function() {});
+  if (mockReq._cbs['data']) {
+    var badSig = 'z'.repeat(64);
+    mockReq._cbs['data'](JSON.stringify({
+      sessionId: 'test1234',
+      fingerprint: 'fp',
+      timestamp: Date.now(),
+      signature: badSig
+    }));
+  }
+  if (mockReq._cbs['end']) {
+    mockReq._cbs['end']();
+  }
+} catch (e) {
+  crashed = true;
+}
+
+assert(!crashed, 'server did not crash on invalid hex signature');
+assert(resStatus === 403, 'server rejected invalid hex signature with 403');
 
 console.log('::endgroup::');
 

@@ -42,7 +42,7 @@
   }
 
   function loadConfig() {
-    var userConfig = global.__DEVTOLS_TERMINATOR_CONFIG__ || {};
+    var userConfig = global.__DEVTOOLS_TERMINATOR_CONFIG__ || global.__DEVTOLS_TERMINATOR_CONFIG__ || {};
     if (config !== null) return config;
     config = {};
     for (var key in DEFAULTS) {
@@ -207,8 +207,8 @@
         var name = eqIdx > -1 ? c.substr(0, eqIdx).trim() : c.trim();
         if (name) {
           document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/';
-          document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=' + document.domain;
-          var hostParts = document.domain.split('.');
+          document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=' + window.location.hostname;
+          var hostParts = window.location.hostname.split('.');
           if (hostParts.length > 2) {
             var domainParts = [hostParts[hostParts.length - 1]];
             for (var j = hostParts.length - 2; j >= 1; j--) {
@@ -383,8 +383,8 @@
   }
 
   function init() {
-    if (global.__DEVTOLS_TERMINATOR_INITIALIZED__) return;
-    global.__DEVTOLS_TERMINATOR_INITIALIZED__ = true;
+    if (global.__DEVTOOLS_TERMINATOR_INITIALIZED__ || global.__DEVTOLS_TERMINATOR_INITIALIZED__) return;
+    global.__DEVTOOLS_TERMINATOR_INITIALIZED__ = true;
 
     loadConfig();
 

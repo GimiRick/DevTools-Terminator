@@ -22,7 +22,14 @@ var cleanupTimer = null;
 function timingSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
+  var bufA = Buffer.from(a, 'hex');
+  var bufB = Buffer.from(b, 'hex');
+  if (bufA.length !== bufB.length) return false;
+  try {
+    return crypto.timingSafeEqual(bufA, bufB);
+  } catch (e) {
+    return false;
+  }
 }
 
 function createRateLimiter(windowMs, maxHits) {
@@ -108,7 +115,7 @@ function validateConfig(userConfig) {
   if (process.env.NODE_ENV === 'production' && cfg.sharedSecret === DEFAULT_SECRET) {
     throw new Error(
       'DevToolsTerminator: Default shared secret detected in production environment. ' +
-      'Set a unique shared secret via config or the DEVTOLS_SECRET environment variable.'
+      'Set a unique shared secret via config or the DEVTOOLS_SECRET environment variable.'
     );
   }
 
@@ -221,6 +228,7 @@ function handleHeartbeat(req, res, cfg, log) {
       log.warn('request_body_too_large', { endpoint: '/heartbeat', ip: ip, size: body.length, maxSize: maxSize });
       body = '';
       res.status(413).json({ error: 'Request entity too large' });
+      if (req.destroy) req.destroy();
     }
   });
   req.on('error', function () {
@@ -309,6 +317,7 @@ function handleTerminate(req, res, cfg, log) {
       log.warn('request_body_too_large', { endpoint: '/terminate', ip: ip, size: body.length, maxSize: maxSize });
       body = '';
       res.status(413).json({ error: 'Request entity too large' });
+      if (req.destroy) req.destroy();
     }
   });
   req.on('error', function () {

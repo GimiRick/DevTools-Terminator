@@ -7,7 +7,7 @@ var devtoolsTerminator = require('../src/server/devtools-terminator-server');
 var app = express();
 var PORT = process.env.PORT || 3000;
 
-var sharedSecret = process.env.DEVTOLS_SECRET || 'your-random-secret-here';
+var sharedSecret = process.env.DEVTOOLS_SECRET || 'your-random-secret-here';
 
 var devtoolsMiddleware = devtoolsTerminator({
   sharedSecret: sharedSecret,

@@ -112,7 +112,7 @@ This installs the Express dependency required for Hybrid server mode. The client
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          DEVTOLS TERMINATOR                                 │
+│                          DEVTOOLS TERMINATOR                                 │
 │               Browser Security & Anti-DevTools Library                      │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -183,7 +183,7 @@ This installs the Express dependency required for Hybrid server mode. The client
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        CONFIGURATION LAYER                                  │
-│          window.__DEVTOLS_TERMINATOR_CONFIG__ (frozen after init)           │
+│          window.__DEVTOOLS_TERMINATOR_CONFIG__ (frozen after init)           │
 │                                                                             │
 │  terminationURL  │  checkInterval  │  windowSizeCheck  │  blockKeyboard     │
 │  blockInteractions │  disableOnMobile │  onTermination  │  hybridMode       │
@@ -238,7 +238,7 @@ Then add the script tag to your HTML:
 
 ```html
 <script>
-  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+  window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
     terminationURL: '/terminated.html'
   };
 </script>
@@ -299,7 +299,7 @@ After running `init`, link the copied files:
 
 ```html
 <script>
-  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+  window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
     terminationURL: '/terminated.html'
   };
 </script>
@@ -319,7 +319,7 @@ Or reference the file directly from `node_modules`:
 import 'devtools-terminator';
 
 // Or with explicit config
-window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
   terminationURL: '/terminated.html'
 };
 import 'devtools-terminator';
@@ -327,7 +327,7 @@ import 'devtools-terminator';
 
 ```javascript
 // Hybrid
-window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
   hybridMode: true,
   serverEndpoint: '/api/devtools',
   sharedSecret: 'your-secret-key'
@@ -341,7 +341,7 @@ import 'devtools-terminator/hybrid';
 const devtoolsMiddleware = require('devtools-terminator/server');
 
 app.use('/api/devtools', devtoolsMiddleware({
-  sharedSecret: process.env.DEVTOLS_SECRET,
+  sharedSecret: process.env.DEVTOOLS_SECRET,
   rateLimitHeartbeat: 60,
   rateLimitTerminate: 10,
   rateLimitSession: 30,
@@ -355,7 +355,7 @@ app.use('/api/devtools', devtoolsMiddleware({
 Create a `.env` file:
 
 ```ini
-DEVTOLS_SECRET=your-64-char-hex-string
+DEVTOOLS_SECRET=your-64-char-hex-string
 PORT=3000
 ```
 
@@ -385,7 +385,7 @@ The following are excluded from the published package:
 
 ## Configuration Reference
 
-Configure the library by defining `window.__DEVTOLS_TERMINATOR_CONFIG__` before the script loads. The configuration object is frozen after initialization and cannot be modified at runtime.
+Configure the library by defining `window.__DEVTOOLS_TERMINATOR_CONFIG__` before the script loads. The configuration object is frozen after initialization and cannot be modified at runtime.
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -403,26 +403,26 @@ Configure the library by defining `window.__DEVTOLS_TERMINATOR_CONFIG__` before 
 ```html
 <!-- Block everything (default) -->
 <script>
-  window.__DEVTOLS_TERMINATOR_CONFIG__ = {};
+  window.__DEVTOOLS_TERMINATOR_CONFIG__ = {};
 </script>
 
 <!-- Allow right-click, text selection, and drag (keep keyboard blocking) -->
 <script>
-  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+  window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
     blockInteractions: false
   };
 </script>
 
 <!-- Allow keyboard shortcuts (keep right-click etc. blocked) -->
 <script>
-  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+  window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
     blockKeyboard: false
   };
 </script>
 
 <!-- Allow everything -->
 <script>
-  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+  window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
     blockKeyboard: false,
     blockInteractions: false
   };
@@ -435,7 +435,7 @@ Configure the server middleware by passing options to `devtoolsTerminator()`:
 
 ```javascript
 const devtoolsMiddleware = devtoolsTerminator({
-  sharedSecret: process.env.DEVTOLS_SECRET,
+  sharedSecret: process.env.DEVTOOLS_SECRET,
   rateLimitHeartbeat: 60,    // 60 heartbeats/min per IP
   rateLimitTerminate: 10,    // 10 terminate beacons/min per IP
   rateLimitSession: 30,      // 30 session creations/min per IP
