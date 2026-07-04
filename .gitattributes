@@ -1,0 +1,25 @@
+* text=auto
+
+# Client source — LF for consistency with browsers
+src/client/*.js text eol=lf
+
+# Server source
+src/server/*.js text
+
+# CLI source
+src/cli/*.js text
+
+# Docs
+*.md text
+*.html text
+
+# Config
+.json text
+.env* text
+.gitattributes text
+.gitignore text
+
+# Binaries
+.png binary
+.ico binary
+.jpg binary
