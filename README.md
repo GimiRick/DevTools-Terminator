@@ -458,7 +458,7 @@ After initialization, the library exposes a read-only API on `window.DevToolsTer
 | Vivaldi | Latest | All | Full support |
 | Arc | Latest | macOS | Full support |
 
-**Note on Chrome Desktop:** Due to Chrome's highly optimized DevTools, certain detection methods may behave differently on Windows and macOS. Chrome on Linux is not a guaranteed target. For the highest level of protection, prioritize testing on Firefox, Safari, and Edge.
+**Note on Chrome:** DevTools-Terminator works on Windows and Mac. But Chrome's DevTools are very optimized, so some detection features may work differently on Windows and Mac. On Linux, it may not work at all.
 
 ---
 
