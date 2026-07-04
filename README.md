@@ -187,7 +187,7 @@ This installs the Express dependency required for Hybrid server mode. The client
 │                                                                             │
 │  terminationURL  │  checkInterval  │  windowSizeCheck  │  blockKeyboard     │
 │  blockInteractions │  disableOnMobile │  onTermination  │  hybridMode       │
-│  serverEndpoint  │  sharedSecret   │                                         │
+│  serverEndpoint  │  sharedSecret   │                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
