@@ -176,6 +176,37 @@ function handleTerminate(req, res) {
       var data = JSON.parse(body);
       var sessionId = extractSessionId(req) || data.sessionId || 'anonymous';
 
+      if (!data.fingerprint || !data.timestamp || !data.signature) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      var payload = data.fingerprint + '::' + data.timestamp;
+
+      var expectedSig = crypto
+        .createHmac('sha256', config.sharedSecret)
+        .update(payload)
+        .digest('hex');
+
+      if (!timingSafeEqual(data.signature, expectedSig)) {
+        if (config.onTermination) {
+          try {
+            config.onTermination({
+              sessionId: sessionId,
+              reason: 'SEC_DEVTOOLS_INVALID_SIG',
+              timestamp: Date.now(),
+              ip: req.ip || req.socket.remoteAddress
+            });
+          } catch (e) {}
+        }
+        return res.status(403).json({ error: 'Invalid signature', code: 'SEC_DEVTOOLS_INVALID_SIG' });
+      }
+
+      var now = Date.now();
+      var payloadAge = now - data.timestamp;
+      if (payloadAge > config.replayWindow || payloadAge < -config.replayWindow) {
+        return res.status(403).json({ error: 'Payload expired' });
+      }
+
       if (sessions[sessionId]) {
         sessions[sessionId].terminated = true;
       }
@@ -186,7 +217,7 @@ function handleTerminate(req, res) {
           config.onTermination({
             sessionId: sessionId,
             reason: data.reason || 'SEC_DEVTOOLS_UNKNOWN',
-            timestamp: Date.now(),
+            timestamp: now,
             ip: req.ip || req.socket.remoteAddress
           });
         } catch (e) {}
@@ -205,16 +236,8 @@ function cleanupStaleSessions() {
 
   for (var id in sessions) {
     if (sessions.hasOwnProperty(id)) {
-      if (now - sessions[id].lastHeartbeat > threshold) {
+      if (!terminatedSessions[id] && now - sessions[id].lastHeartbeat > threshold) {
         delete sessions[id];
-      }
-    }
-  }
-
-  for (var tid in terminatedSessions) {
-    if (terminatedSessions.hasOwnProperty(tid)) {
-      if (!sessions[tid] || (now - sessions[tid].lastHeartbeat > threshold)) {
-        delete terminatedSessions[tid];
       }
     }
   }

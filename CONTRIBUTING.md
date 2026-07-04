@@ -22,7 +22,7 @@ npm install
 ## Code Style
 
 - **JavaScript only** — no TypeScript
-- **No transpilers** — the code runs directly in browsers and Node.js 14+
+- **No transpilers** — the code runs directly in browsers and Node.js 20+
 - **No runtime dependencies** — the client library must remain dependency-free
 - **CSP compatible** — no `eval`, no `new Function()`, no inline event handlers
 - **ES5 compatible** — the client library targets older browsers where possible

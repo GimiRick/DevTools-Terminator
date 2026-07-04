@@ -87,7 +87,7 @@ This section is for users who obtain the library via `git clone`.
 
 ### Prerequisites
 
-- Node.js 14+ (required for the Hybrid server demo and npm operations)
+- Node.js 20+ (required for the Hybrid server demo and npm operations)
 - A local HTTP server for the Client-Only demo (any will do)
 
 ### Clone

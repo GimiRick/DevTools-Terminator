@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 14+ (for npm installation and Hybrid mode)
+- Node.js 20+ (for npm installation and Hybrid mode)
 - A web server (for Client-Only mode, any static server works)
 
 ## Quick Start — Client-Only

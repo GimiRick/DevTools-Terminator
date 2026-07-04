@@ -133,8 +133,8 @@
   }
 
   function fetchSessionId() {
-    if (!config.serverEndpoint) return;
-    fetch(config.serverEndpoint + '/session').then(function (res) {
+    if (!config.serverEndpoint) return Promise.resolve();
+    return fetch(config.serverEndpoint + '/session').then(function (res) {
       return res.json();
     }).then(function (data) {
       if (data && data.sessionId) {
@@ -390,8 +390,9 @@
     consoleDetection();
     viewportDetection();
     debuggerDetection();
-    fetchSessionId();
-    startHeartbeat();
+    fetchSessionId().then(function () {
+      startHeartbeat();
+    });
 
     global.DevToolsTerminator = {
       version: VERSION,
