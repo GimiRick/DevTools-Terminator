@@ -170,6 +170,8 @@
       if (sessionId) url += '?session=' + encodeURIComponent(sessionId);
       if (typeof navigator.sendBeacon === 'function') {
         navigator.sendBeacon(url, JSON.stringify(body));
+      } else if (typeof fetch === 'function') {
+        fetch(url, { method: 'POST', body: JSON.stringify(body), keepalive: true }).catch(function () {});
       }
     }).catch(function () {});
   }
@@ -191,6 +193,8 @@
         if (sessionId) url += '?session=' + encodeURIComponent(sessionId);
         if (typeof navigator.sendBeacon === 'function') {
           navigator.sendBeacon(url, body);
+        } else if (typeof fetch === 'function') {
+          fetch(url, { method: 'POST', body: body, keepalive: true }).catch(function () {});
         }
       });
     }).catch(function () {});
@@ -267,10 +271,12 @@
 
     var doNavigate = function() {
       clearAllStorage();
-      var url = config.terminationURL;
-      if (url) {
-        global.location.replace(url);
-      }
+      setTimeout(function() {
+        var url = config.terminationURL;
+        if (url) {
+          global.location.replace(url);
+        }
+      }, 100);
     };
 
     if (config.hybridMode && config.serverEndpoint) {
@@ -342,6 +348,7 @@
       var key = e.key || e.keyCode;
       var ctrl = e.ctrlKey || e.metaKey;
       var shift = e.shiftKey;
+      var alt = e.altKey;
 
       if (key === 'F12' || key === 123) {
         e.preventDefault();
@@ -349,7 +356,7 @@
         return;
       }
 
-      if (ctrl && shift) {
+      if (ctrl && (shift || alt)) {
         var k = typeof key === 'string' ? key.toUpperCase() : '';
         if (k === 'I' || k === 'J' || k === 'C' || key === 73 || key === 74 || key === 67) {
           e.preventDefault();
