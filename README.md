@@ -129,7 +129,10 @@ devtools-terminator/
 ├── .env.example                           # Environment template
 ├── package.json
 ├── README.md
-└── LICENSE
+├── LICENSE
+├── SECURITY.md                            # Security policy
+├── CONTRIBUTING.md                        # Contribution guidelines
+└── CODE_OF_CONDUCT.md                     # Code of conduct
 ```
 
 ### Run the Client-Only Demo
@@ -417,7 +420,7 @@ DevTools Terminator is a **deterrent layer**, not a replacement for server-side 
 - Proxy-based traffic interception
 - Physical access attacks
 
-For production applications, combine this tool with server-side authentication, Content Security Policy, Subresource Integrity, HTTPS, and backend authorization. See `docs/SECURITY.md` for a full discussion.
+For production applications, combine this tool with server-side authentication, Content Security Policy, Subresource Integrity, HTTPS, and backend authorization. See [`SECURITY.md`](SECURITY.md) for our security policy or `docs/SECURITY.md` for a full discussion.
 
 ---
 
@@ -429,6 +432,8 @@ Contributions are welcome! All contributions must be in **JavaScript** — no Ty
 2. Create a feature branch
 3. Make your changes
 4. Submit a pull request
+
+For detailed guidelines, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
