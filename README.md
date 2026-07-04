@@ -457,7 +457,11 @@ The browser sends a heartbeat to the server every 30 seconds. Each heartbeat con
 - A **script integrity hash** — SHA-256 hash of the running script's source code
 - A **timestamp** — used for replay attack prevention
 
-The payload is signed with **HMAC-SHA256** using a shared secret. The server verifies the signature using a timing-safe comparison, checks the timestamp is within the replay window, and updates the session's last-seen time. If no heartbeat arrives within 45 seconds, the session is considered stale. When DevTools are detected, a termination beacon is sent via `navigator.sendBeacon` — a fire-and-forget API that survives page unload.
+The payload is signed with **HMAC-SHA256** using a shared secret. The server verifies the signature using a timing-safe comparison, checks the timestamp is within the replay window, and updates the session's last-seen time.
+
+**If a heartbeat doesn't arrive within 45 seconds, or if the server receives a termination beacon, the session is marked as terminated.** All subsequent API requests from that session get a **403 Forbidden** response. The server keeps a list of terminated sessions and checks every incoming request against it.
+
+**However**, the shared secret is embedded in the client code. So if someone modifies the client script, they still have the secret and can forge valid heartbeats. The server cannot tell the difference. This stops casual tampering but not a determined attacker.
 
 ---
 
