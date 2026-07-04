@@ -1,0 +1,45 @@
+{
+  "name": "devtools-terminator",
+  "version": "0.1.0",
+  "description": "A lightweight browser security library that detects and prevents Developer Tools access by terminating the session",
+  "main": "src/client/devtools-terminator.js",
+  "browser": "src/client/devtools-terminator.js",
+  "exports": {
+    ".": "./src/client/devtools-terminator.js",
+    "./client": "./src/client/devtools-terminator.js",
+    "./hybrid": "./src/client/devtools-terminator-hybrid.js",
+    "./server": "./src/server/devtools-terminator-server.js"
+  },
+  "bin": {
+    "devtools-terminator": "./src/cli/init.js"
+  },
+  "files": [
+    "src/",
+    "public/terminated.html",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "express": "^4.18.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "devtools",
+    "browser",
+    "protection",
+    "anti-devtools",
+    "anti-hacking"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GimiRick/DevTools-Terminator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/GimiRick/DevTools-Terminator/issues"
+  },
+  "homepage": "https://github.com/GimiRick/DevTools-Terminator#readme"
+}
