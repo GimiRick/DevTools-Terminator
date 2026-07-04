@@ -13,6 +13,11 @@ var devtoolsMiddleware = devtoolsTerminator({
   sharedSecret: sharedSecret,
   staleThreshold: 45000,
   replayWindow: 10000,
+  rateLimitHeartbeat: 60,
+  rateLimitTerminate: 10,
+  rateLimitSession: 30,
+  maxBodySize: 10240,
+  logLevel: 'info',
   onTermination: function (data) {
     console.log('[SECURITY] Session terminated:', JSON.stringify(data));
   },
