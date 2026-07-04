@@ -392,6 +392,35 @@ Configure the library by defining `window.__DEVTOLS_TERMINATOR_CONFIG__` before 
 | `serverEndpoint` | `string` | `''` | Server URL for heartbeats and beacons (Hybrid only) |
 | `sharedSecret` | `string` | `''` | HMAC key matching server config (Hybrid only) |
 
+```html
+<!-- Block everything (default) -->
+<script>
+  window.__DEVTOLS_TERMINATOR_CONFIG__ = {};
+</script>
+
+<!-- Allow right-click, text selection, and drag (keep keyboard blocking) -->
+<script>
+  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+    blockInteractions: false
+  };
+</script>
+
+<!-- Allow keyboard shortcuts (keep right-click etc. blocked) -->
+<script>
+  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+    blockKeyboard: false
+  };
+</script>
+
+<!-- Allow everything -->
+<script>
+  window.__DEVTOLS_TERMINATOR_CONFIG__ = {
+    blockKeyboard: false,
+    blockInteractions: false
+  };
+</script>
+```
+
 ---
 
 ## How It Works
