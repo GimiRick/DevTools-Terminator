@@ -17,6 +17,7 @@
     checkInterval: 1000,
     windowSizeCheck: true,
     blockKeyboard: true,
+    blockInteractions: true,
     disableOnMobile: true,
     onTermination: null,
     hybridMode: true,
@@ -351,6 +352,8 @@
         return;
       }
     });
+
+    if (!config.blockInteractions) return;
 
     document.addEventListener('contextmenu', function (e) {
       e.preventDefault();

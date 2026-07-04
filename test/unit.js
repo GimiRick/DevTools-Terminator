@@ -163,6 +163,10 @@ assert(pkg.version === '0.1.0', 'package.json version is 0.1.0');
 assert(clientCode.indexOf("'/terminated.html'") !== -1, 'client default terminationURL is /terminated.html');
 assert(hybridCode.indexOf("'/terminated.html'") !== -1, 'hybrid default terminationURL is /terminated.html');
 
+// blockInteractions option exists in both client files
+assert(clientCode.indexOf('blockInteractions') !== -1, 'client file has blockInteractions option');
+assert(hybridCode.indexOf('blockInteractions') !== -1, 'hybrid file has blockInteractions option');
+
 // Reason codes consistency - same codes should appear in both client files
 var clientReasons = [
   'SEC_DEVTOOLS_CONSOLE_001',

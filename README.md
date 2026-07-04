@@ -183,8 +183,8 @@ This installs the Express dependency required for Hybrid server mode. The client
 │          window.__DEVTOLS_TERMINATOR_CONFIG__ (frozen after init)           │
 │                                                                             │
 │  terminationURL  │  checkInterval  │  windowSizeCheck  │  blockKeyboard     │
-│  disableOnMobile │  onTermination  │  hybridMode       │  serverEndpoint    │
-│  sharedSecret    │                                                          │
+│  blockInteractions │  disableOnMobile │  onTermination  │  hybridMode       │
+│  serverEndpoint  │  sharedSecret   │                                         │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -385,6 +385,7 @@ Configure the library by defining `window.__DEVTOLS_TERMINATOR_CONFIG__` before 
 | `checkInterval` | `number` | `1000` | Detection loop polling interval in ms |
 | `windowSizeCheck` | `boolean` | `true` | Enable viewport differential detection |
 | `blockKeyboard` | `boolean` | `true` | Intercept DevTools keyboard shortcuts |
+| `blockInteractions` | `boolean` | `true` | Block right-click, text selection, and drag |
 | `disableOnMobile` | `boolean` | `true` | Suppress checks on mobile devices |
 | `onTermination` | `function` | `null` | Callback executed on detection (receives reason code) |
 | `hybridMode` | `boolean` | `false` | Enable heartbeat system (Hybrid only) |
