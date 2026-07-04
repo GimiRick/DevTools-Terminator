@@ -4,7 +4,7 @@
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![npm](https://img.shields.io/badge/npm-devtools--terminator-red)
+[![npm](https://img.shields.io/npm/v/devtools-terminator)](https://www.npmjs.com/package/devtools-terminator)
 ![Node](https://img.shields.io/badge/node-%3E%3D20.19.0-brightgreen)
 
 DevTools Terminator detects when a user opens browser Developer Tools and immediately terminates their session — wiping all locally stored data and redirecting to a termination page. It uses three independent detection mechanisms, keyboard interception, and full storage sanitization.
