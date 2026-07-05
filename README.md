@@ -44,7 +44,7 @@ Part of the **GimiRick** toolchain. We build open source LLMs and AI systems. Fo
 ### Client-Only Mode
 
 - **Console getter trap** — monitors console access via a property getter on a plain object, logged every 100ms (keeps a live entry in Chrome's ring buffer)
-- **Viewport differential** — detects DevTools docked to the side (100px width diff) or bottom (160px height diff), checked every 100ms
+- **Viewport differential** — detects DevTools docked to the side (150px width diff) or bottom (170px height diff), checked every 100ms
 - **Keyboard interception** — blocks F12, Ctrl+Shift+I/J/C, Ctrl+U and macOS equivalents
 - **UI protection** — disables right-click, text selection, and drag-and-drop
 - **Full storage wipe** — clears localStorage, sessionStorage, cookies, IndexedDB, CacheStorage
@@ -125,12 +125,12 @@ This installs the Express dependency required for Hybrid server mode. The client
 │   ┌───────────────┐   │   │  ┌────────────┐   │     │                          │
 │   │ Detection     │   │   │  │ Detection  │   │     │  ┌────────────────────┐  │
 │   │ Mechanisms    │   │   │  │ Mechanisms │   │     │  │ Routes             │  │
-│   │               │   │   │  │ (same 4)   │   │     │  │                    │  │
+│   │               │   │   │  │ (same 3)   │   │     │  │                    │  │
 │   │ • Console     │   │  │ └─────┬──────┘   │     │  │ POST /heartbeat    │  │
 │   │   Getter Trap │   │  │        │          │     │  │ POST /terminate    │  │
 │   │ • Viewport    │   │  │        ▼          │     │  │ GET  /session      │  │
 │   │   W+H Diff    │   │  │  ┌─────────────┐  │     │  │ 403 Check (all)    │  │
-│   │   (100/160px) │   │  │  │ Heartbeat   │  │     │  └────────────────────┘  │
+│   │   (150/170px) │   │  │  │ Heartbeat   │  │     │  └────────────────────┘  │
 │   │ • Keyboard    │   │  │  │ System      │  │     │                          │
 │   │ • Keyboard    │   │   │  │             │  │     │  ┌────────────────────┐  │
 │   │   Interception│   │   │  │ HMAC-SHA256 │  │     │  │ Session Store      │  │
@@ -185,7 +185,7 @@ This installs the Express dependency required for Hybrid server mode. The client
 │                        CONFIGURATION LAYER                                  │
 │          window.__DEVTOOLS_TERMINATOR_CONFIG__ (frozen after init)          │
 │                                                                             │
-│  terminationURL  │  checkInterval  │  windowSizeCheck  │  blockKeyboard     │
+│  terminationURL  │  windowSizeCheck  │  blockKeyboard       │
 │  blockInteractions │  disableOnMobile │  onTermination  │  hybridMode       │
 │  serverEndpoint  │  sharedSecret   │                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -379,7 +379,7 @@ The following are excluded from the published package:
 - `examples/` — demos and usage examples
 - `docs/` — documentation files
 - `.env.example` — environment template
-- `BUILD.md` — build specification
+
 
 ---
 
@@ -390,7 +390,6 @@ Configure the library by defining `window.__DEVTOOLS_TERMINATOR_CONFIG__` before
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `terminationURL` | `string` | `'/terminated.html'` | URL to redirect to on detection |
-| `checkInterval` | `number` | `1000` | Detection loop polling interval in ms |
 | `windowSizeCheck` | `boolean` | `true` | Enable viewport differential detection |
 | `blockKeyboard` | `boolean` | `true` | Intercept DevTools keyboard shortcuts |
 | `blockInteractions` | `boolean` | `true` | Block right-click, text selection, and drag |
@@ -477,8 +476,8 @@ On Firefox, getters are evaluated eagerly even during no-op stub processing, mak
 
 Two static checks run every 100ms:
 
-- **Width:** `outerWidth - innerWidth > 100` — catches DevTools docked to the right side. A 100px threshold is safe because browser chrome only affects the height (toolbar, tabs, address bar), so the width diff comes exclusively from the DevTools panel.
-- **Height:** `outerHeight - innerHeight > 160` — catches DevTools docked to the bottom. The threshold is safely above browser chrome (typically 70-136px on Windows/Mac).
+- **Width:** `outerWidth - innerWidth > 150` — catches DevTools docked to the right side. A 150px threshold safely clears extension sidebars (typically 50–120px) while reliably catching all DevTools panels (≥200px).
+- **Height:** `outerHeight - innerHeight > 170` — catches DevTools docked to the bottom. The threshold is safely above browser chrome (typically 70–136px on Windows/Mac).
 
 A **delta tracking** check complements the static checks by monitoring sudden drops in `innerWidth` or `innerHeight` while both `outerWidth` and `outerHeight` stay nearly constant. This catches the exact moment of DevTools side-docking or bottom-docking mid-session, even if the final panel is narrower than the static thresholds.
 
@@ -543,7 +542,7 @@ After initialization, the library exposes a read-only API on `window.DevToolsTer
 | Vivaldi | Latest | All | Full support |
 | Arc | Latest | macOS | Full support |
 
-**Note on Chrome:** Chrome's no-op console stub (DevTools closed) does not evaluate getters on logged objects — the getter trap only fires when DevTools processes the buffered log entry. Repeated `console.log(obj)` every 100ms ensures a fresh entry is always in the ring buffer. Viewport detection provides the primary detection path for Chrome, catching both side-docked (100px width diff) and bottom-docked (160px height diff) DevTools. Undocked DevTools in a separate window remain a known fundamental limitation of JavaScript-based detection.
+**Note on Chrome:** Chrome's no-op console stub (DevTools closed) does not evaluate getters on logged objects — the getter trap only fires when DevTools processes the buffered log entry. Repeated `console.log(obj)` every 100ms ensures a fresh entry is always in the ring buffer. Viewport detection provides the primary detection path for Chrome, catching both side-docked (150px width diff) and bottom-docked (170px height diff) DevTools. Undocked DevTools in a separate window remain a known fundamental limitation of JavaScript-based detection.
 
 ---
 

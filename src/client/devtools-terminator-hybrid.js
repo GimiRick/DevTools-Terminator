@@ -13,7 +13,6 @@
 
   var DEFAULTS = {
     terminationURL: '/terminated.html',
-    checkInterval: 1000,
     windowSizeCheck: true,
     blockKeyboard: true,
     blockInteractions: true,
@@ -207,7 +206,7 @@
       for (var i = 0; i < cookies.length; i++) {
         var c = cookies[i];
         var eqIdx = c.indexOf('=');
-        var name = eqIdx > -1 ? c.substr(0, eqIdx).trim() : c.trim();
+        var name = eqIdx > -1 ? c.substring(0, eqIdx).trim() : c.trim();
         if (name) {
           document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/';
           document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=' + window.location.hostname;

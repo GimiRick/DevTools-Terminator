@@ -13,7 +13,6 @@
 // 1. Define configuration BEFORE loading the script
 window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
   terminationURL: '/terminated.html',
-  checkInterval: 1000,
   windowSizeCheck: true,
   blockKeyboard: true,
   disableOnMobile: true,
@@ -51,7 +50,6 @@ function onLogout() {
 // 1. Configure for hybrid mode
 window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
   terminationURL: '/terminated.html',
-  checkInterval: 1000,
   hybridMode: true,
   serverEndpoint: '/api/devtools',
   sharedSecret: 'your-shared-secret-key',
