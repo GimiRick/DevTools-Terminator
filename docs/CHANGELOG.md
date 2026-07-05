@@ -2,13 +2,30 @@
 
 ## [0.1.2] — 2026-07-06
 
+### Added (0.1.2)
+
+- Viewport detection now checks both width (150px) and height (170px) — catches side-docked DevTools on Chrome/Chromium (width check safely above browser chrome, below typical extension sidebar widths)
+- Viewport detection interval reduced from 1000ms to 100ms for near-instant response
+- Viewport delta tracking with outer dimension stability check (catches mid-session docking)
+- `DevToolsTerminator._status()` diagnostic method — returns current viewport dimensions, `isMobile`, `windowSizeCheck` state and other debug info
+- Repeated `console.log(obj)` every 100ms keeps a live entry in Chrome's ring buffer (was once during init; the single entry could be evicted before DevTools opens)
+
+### Fixed
+
+- **Critical Chrome/Mac false positive in `isMobile()`**: switched from `'ontouchstart' in global` (always `true` on Chrome/Mac due to Touch Bar event support) to `navigator.maxTouchPoints > 0` (only `true` on actual touch hardware). On Chrome/Mac, `isMobile()` was returning `true`, which disabled viewport detection entirely via `disableOnMobile` — meaning NO detection mechanism was active on Chrome/Mac
+- Viewport thresholds adjusted: width 150px, height 170px — balanced to avoid extension sidebar false positives while reliably detecting DevTools
+- Restored width-docked DevTools detection (was removed due to false positives from sidebar extensions at lower thresholds; 150px threshold avoids narrow extensions while catching all DevTools ≥200px)
+- Height threshold set to 170px to safely clear Firefox power-user chrome (~165px max)
+
 ### Removed
 
+- `SEC_DEVTOOLS_FORMAT_005` reason code (format probe function was already removed in an earlier iteration; constant was dead code)
+- `console.clear()` removed from detection — was potentially interfering with Chrome's ring buffer processing
 - Debugger timing detection removed entirely — caused false positives on Chromium-based browsers
 
 ## [0.1.1] — 2026-07-05
 
-### Added
+### Added (0.1.1)
 
 - Per-IP rate limiting on heartbeat, terminate, and session endpoints
 - Request body size limits to prevent OOM attacks (configurable, default 10KB)

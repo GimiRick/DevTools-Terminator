@@ -43,8 +43,8 @@ Part of the **GimiRick** toolchain. We build open source LLMs and AI systems. Fo
 
 ### Client-Only Mode
 
-- **Console detection** — secretly monitors console access via a property getter trap
-- **Viewport differential** — detects DevTools docked to the side or bottom
+- **Console getter trap** — monitors console access via a property getter on a plain object, logged every 100ms (keeps a live entry in Chrome's ring buffer)
+- **Viewport differential** — detects DevTools docked to the side (100px width diff) or bottom (160px height diff), checked every 100ms
 - **Keyboard interception** — blocks F12, Ctrl+Shift+I/J/C, Ctrl+U and macOS equivalents
 - **UI protection** — disables right-click, text selection, and drag-and-drop
 - **Full storage wipe** — clears localStorage, sessionStorage, cookies, IndexedDB, CacheStorage
@@ -126,14 +126,15 @@ This installs the Express dependency required for Hybrid server mode. The client
 │   │ Detection     │   │   │  │ Detection  │   │     │  ┌────────────────────┐  │
 │   │ Mechanisms    │   │   │  │ Mechanisms │   │     │  │ Routes             │  │
 │   │               │   │   │  │ (same 4)   │   │     │  │                    │  │
-│   │ • Console     │   │   │  └─────┬──────┘   │     │  │ POST /heartbeat    │  │
-│   │   Getter Trap │   │   │        │          │     │  │ POST /terminate    │  │
-│   │ • Viewport    │   │   │        ▼          │     │  │ GET  /session      │  │
-│   │   Diff (>200) │   │   │  ┌─────────────┐  │     │  │ 403 Check (all)    │  │
-│   │ • Debugger    │   │   │  │ Heartbeat   │  │     │  └────────────────────┘  │
-│   │  Timing(100ms)│   │   │  │ System      │  │     │                          │
+│   │ • Console     │   │  │ └─────┬──────┘   │     │  │ POST /heartbeat    │  │
+│   │   Getter Trap │   │  │        │          │     │  │ POST /terminate    │  │
+│   │ • Viewport    │   │  │        ▼          │     │  │ GET  /session      │  │
+│   │   W+H Diff    │   │  │  ┌─────────────┐  │     │  │ 403 Check (all)    │  │
+│   │   (100/160px) │   │  │  │ Heartbeat   │  │     │  └────────────────────┘  │
+│   │ • Keyboard    │   │  │  │ System      │  │     │                          │
 │   │ • Keyboard    │   │   │  │             │  │     │  ┌────────────────────┐  │
 │   │   Interception│   │   │  │ HMAC-SHA256 │  │     │  │ Session Store      │  │
+│   │               │   │   │  │             │  │     │  │ (in-memory)        │  │
 │   └───────┬───────┘   │   │  │ Fingerprint │  │     │  │ (in-memory)        │  │
 │           │           │   │  │ Script Hash │  │     │  │                    │  │
 │           ▼           │   │  │ 30s interval│  │     │  │ lastHeartbeat      │  │
@@ -446,6 +447,7 @@ const devtoolsMiddleware = devtoolsTerminator({
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
+| `sharedSecret` | `string` | `'change-this-to-a-random-secret'` | HMAC key — must match client config |
 | `rateLimitWindow` | `number` | `60000` | Rate limit window in ms |
 | `rateLimitHeartbeat` | `number` | `60` | Max heartbeats per window per IP |
 | `rateLimitTerminate` | `number` | `10` | Max termination beacons per window per IP |
@@ -453,6 +455,11 @@ const devtoolsMiddleware = devtoolsTerminator({
 | `maxBodySize` | `number` | `10240` | Maximum request body size in bytes |
 | `logLevel` | `string` | `'info'` | Log level: `error`, `warn`, `info`, `debug` |
 | `logger` | `function` | `null` | Custom logger — receives `{time, level, msg, module, ...}` |
+| `staleThreshold` | `number` | `45000` | Session stale timeout in ms (no heartbeat grace) |
+| `replayWindow` | `number` | `10000` | Replay attack prevention window in ms |
+| `cleanupInterval` | `number` | `60000` | Stale session cleanup interval in ms |
+| `onTermination` | `function` | `null` | Callback on termination — receives `{sessionId, reason, timestamp, ip}` |
+| `onHeartbeat` | `function` | `null` | Callback on heartbeat — receives `{sessionId, fingerprint, timestamp}` |
 
 When no custom logger is provided, the middleware writes JSON-formatted log entries to stdout (info, debug) and stderr (warn, error).
 
@@ -462,11 +469,18 @@ When no custom logger is provided, the middleware writes JSON-formatted log entr
 
 ### Console Object Property Getter
 
-A specially crafted object is created in memory with a property whose getter function fires silently when the browser's DevTools console reads and evaluates it. Under normal conditions (DevTools closed) this getter is never called. The moment a user opens their console, the browser evaluates the object, triggering the getter and initiating termination. This is the primary and most reliable detection method.
+A plain object with an enumerable getter property is logged to the console every 100ms. When DevTools is closed, Chrome's console no-op stub stores a reference without evaluating the object's properties — the getter never fires. When DevTools opens and processes the buffered log entry, Chrome evaluates the object for display, triggering the getter and initiating termination.
+
+On Firefox, getters are evaluated eagerly even during no-op stub processing, making this approach cross-browser compatible.
 
 ### Viewport Dimension Differential
 
-When DevTools are docked to the side or bottom of the browser window, the visible page area (inner dimensions) shrinks while the overall browser window size (outer dimensions) stays the same. The tool continuously measures the difference between these two values. When the gap exceeds a defined pixel threshold (200px), it signals that a panel has been attached — indicating DevTools. This check is automatically skipped on mobile devices to avoid false positives.
+Two static checks run every 100ms:
+
+- **Width:** `outerWidth - innerWidth > 100` — catches DevTools docked to the right side. A 100px threshold is safe because browser chrome only affects the height (toolbar, tabs, address bar), so the width diff comes exclusively from the DevTools panel.
+- **Height:** `outerHeight - innerHeight > 160` — catches DevTools docked to the bottom. The threshold is safely above browser chrome (typically 70-136px on Windows/Mac).
+
+A **delta tracking** check complements the static checks by monitoring sudden drops in `innerWidth` or `innerHeight` while both `outerWidth` and `outerHeight` stay nearly constant. This catches the exact moment of DevTools side-docking or bottom-docking mid-session, even if the final panel is narrower than the static thresholds.
 
 ### Termination Sequence
 
@@ -475,7 +489,7 @@ When any detection method fires, the following happens in strict order:
 1. An internal atomic flag is set to prevent the sequence from running more than once
 2. All active polling intervals are cleared
 3. Any user-defined callback function is executed
-4. In Hybrid Mode: a termination beacon is sent to the server via the Beacon API
+4. In Hybrid Mode: a termination beacon is sent to the server via `fetch({ keepalive: true })` (preferred) or `navigator.sendBeacon()` (fallback)
 5. All local storage is wiped: localStorage, sessionStorage, cookies (across all domain variants), IndexedDB databases, CacheStorage entries
 6. All registered Service Workers are unregistered
 7. The browser is redirected to the termination page via `location.replace()` (prevents back-button navigation)
@@ -529,7 +543,7 @@ After initialization, the library exposes a read-only API on `window.DevToolsTer
 | Vivaldi | Latest | All | Full support |
 | Arc | Latest | macOS | Full support |
 
-**Note on Chrome:** DevTools-Terminator works on Windows and Mac. But Chrome's DevTools are very optimized, so some detection features may work differently on Windows and Mac. On Linux, it may not work at all.
+**Note on Chrome:** Chrome's no-op console stub (DevTools closed) does not evaluate getters on logged objects — the getter trap only fires when DevTools processes the buffered log entry. Repeated `console.log(obj)` every 100ms ensures a fresh entry is always in the ring buffer. Viewport detection provides the primary detection path for Chrome, catching both side-docked (100px width diff) and bottom-docked (160px height diff) DevTools. Undocked DevTools in a separate window remain a known fundamental limitation of JavaScript-based detection.
 
 ---
 
@@ -574,9 +588,24 @@ For detailed guidelines, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## [0.1.2] — 2026-07-06
 
+### Added (0.1.2)
+
+- Viewport detection checks both width (150px) and height (170px), every 100ms
+- Viewport delta tracking with outer dimension stability check
+- `DevToolsTerminator._status()` diagnostic method
+- Repeated `console.log(obj)` every 100ms (keeps live entry in Chrome's ring buffer)
+
+### Fixed
+
+- `isMobile()` now uses `navigator.maxTouchPoints > 0` instead of `'ontouchstart' in global` — fixes Chrome/Mac false positive that disabled viewport detection
+- Viewport width check restored at 150px threshold (avoids narrow extension sidebar false positives while catching all DevTools)
+- Viewport height threshold set to 170px (safely clears max browser chrome height)
+
 ### Removed
 
-- Debugger timing detection removed entirely — caused false positives on Chromium-based browsers
+- `SEC_DEVTOOLS_FORMAT_005` reason code (dead code from earlier removed format probe)
+- `console.clear()` from detection interval
+- Debugger timing detection
 
 For full version history, see `docs/CHANGELOG.md`.
 

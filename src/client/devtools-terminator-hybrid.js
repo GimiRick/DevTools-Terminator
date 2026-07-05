@@ -34,7 +34,7 @@
   function isMobile() {
     var ua = navigator.userAgent;
     var mobileUA = /Android|webOS|iPhone|iPod|iPad|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
-    var isTouch = 'ontouchstart' in global;
+    var isTouch = typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0;
     var isiPadorIOS = /Macintosh/i.test(ua) && isTouch;
     var smallScreen = screen.width < 768;
     return mobileUA || isiPadorIOS || smallScreen;
@@ -167,10 +167,10 @@
     }).then(function (body) {
       var url = config.serverEndpoint + '/heartbeat';
       if (sessionId) url += '?session=' + encodeURIComponent(sessionId);
-      if (typeof navigator.sendBeacon === 'function') {
-        navigator.sendBeacon(url, JSON.stringify(body));
-      } else if (typeof fetch === 'function') {
+      if (typeof fetch === 'function') {
         fetch(url, { method: 'POST', body: JSON.stringify(body), keepalive: true }).catch(function () {});
+      } else if (typeof navigator.sendBeacon === 'function') {
+        navigator.sendBeacon(url, JSON.stringify(body));
       }
     }).catch(function () {});
   }
@@ -190,10 +190,10 @@
         });
         var url = config.serverEndpoint + '/terminate';
         if (sessionId) url += '?session=' + encodeURIComponent(sessionId);
-        if (typeof navigator.sendBeacon === 'function') {
-          navigator.sendBeacon(url, body);
-        } else if (typeof fetch === 'function') {
+        if (typeof fetch === 'function') {
           fetch(url, { method: 'POST', body: body, keepalive: true }).catch(function () {});
+        } else if (typeof navigator.sendBeacon === 'function') {
+          navigator.sendBeacon(url, body);
         }
       });
     }).catch(function () {});
@@ -294,36 +294,54 @@
 
   function consoleDetection() {
     var obj = {};
-    var fired = false;
-    Object.defineProperty(obj, 'check', {
+    Object.defineProperty(obj, 'id', {
       get: function () {
-        fired = true;
+        terminate(REASON_CODES.CONSOLE);
         return 'detected';
       },
       configurable: false,
-      enumerable: false
+      enumerable: true
     });
-    console.log(obj);
     var check = function () {
-      if (fired) {
-        terminate(REASON_CODES.CONSOLE);
-      }
+      if (terminated) return;
+      console.log(obj);
     };
     intervals.push(setInterval(check, 100));
   }
 
   function viewportDetection() {
     if (!config.windowSizeCheck) return;
-    var threshold = 200;
+    var widthThreshold = 150;
+    var heightThreshold = 170;
+    var deltaThreshold = 100;
+    var lastInnerWidth = global.innerWidth;
+    var lastInnerHeight = global.innerHeight;
+    var lastOuterWidth = global.outerWidth;
+    var lastOuterHeight = global.outerHeight;
     var check = function () {
       if (terminated) return;
-      var widthDiff = global.outerWidth - global.innerWidth;
-      var heightDiff = global.outerHeight - global.innerHeight;
-      if (widthDiff > threshold || heightDiff > threshold) {
+      var outerW = global.outerWidth;
+      var outerH = global.outerHeight;
+      var innerW = global.innerWidth;
+      var innerH = global.innerHeight;
+      if (outerW - innerW > widthThreshold || outerH - innerH > heightThreshold) {
         terminate(REASON_CODES.SIZE);
+        return;
       }
+      var deltaW = lastInnerWidth - innerW;
+      var deltaH = lastInnerHeight - innerH;
+      var outerDeltaW = Math.abs(outerW - lastOuterWidth);
+      var outerDeltaH = Math.abs(outerH - lastOuterHeight);
+      if ((deltaW > deltaThreshold || deltaH > deltaThreshold) && outerDeltaW < 20 && outerDeltaH < 20) {
+        terminate(REASON_CODES.SIZE);
+        return;
+      }
+      lastInnerWidth = innerW;
+      lastInnerHeight = innerH;
+      lastOuterWidth = outerW;
+      lastOuterHeight = outerH;
     };
-    intervals.push(setInterval(check, config.checkInterval));
+    intervals.push(setInterval(check, 100));
   }
 
   function keyboardInterception() {
@@ -400,7 +418,22 @@
       version: VERSION,
       isTerminated: function () { return terminated; },
       terminate: function () { terminate(REASON_CODES.MANUAL); },
-      config: config
+      config: config,
+      _status: function () {
+        return {
+          terminated: terminated,
+          windowSizeCheck: config.windowSizeCheck,
+          isMobile: isMobile(),
+          disableOnMobile: config.disableOnMobile,
+          intervals: intervals.length,
+          outerW: global.outerWidth,
+          innerW: global.innerWidth,
+          outerH: global.outerHeight,
+          innerH: global.innerHeight,
+          widthDiff: global.outerWidth - global.innerWidth,
+          heightDiff: global.outerHeight - global.innerHeight
+        };
+      }
     };
 
     Object.freeze(global.DevToolsTerminator);

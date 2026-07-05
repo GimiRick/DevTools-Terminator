@@ -45,7 +45,13 @@ src/
 
 ## Testing
 
-Currently there is no automated test suite. Manual testing is performed by:
+The project includes an automated test suite in `test/`. Run it with:
+
+```bash
+npm test
+```
+
+Manual testing is also performed by:
 
 1. Running the demo pages in `examples/`
 2. Opening DevTools in supported browsers (Chrome, Firefox, Safari, Edge, Opera)
