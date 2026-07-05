@@ -1,11 +1,10 @@
 (function (global) {
   'use strict';
 
-  var VERSION = '0.1.1';
+  var VERSION = '0.1.2';
 
   var REASON_CODES = {
     CONSOLE: 'SEC_DEVTOOLS_CONSOLE_001',
-    DEBUGGER: 'SEC_DEVTOOLS_DEBUGGER_002',
     SIZE: 'SEC_DEVTOOLS_SIZE_003',
     KEY: 'SEC_DEVTOOLS_KEY_004',
     MANUAL: 'SEC_DEVTOOLS_MANUAL',
@@ -163,21 +162,6 @@
     intervals.push(setInterval(check, config.checkInterval));
   }
 
-  function debuggerDetection() {
-    var perf = typeof performance !== 'undefined' ? performance : null;
-    if (!perf) return;
-    var check = function () {
-      if (terminated) return;
-      var start = perf.now();
-      debugger;
-      var elapsed = perf.now() - start;
-      if (elapsed > 100) {
-        terminate(REASON_CODES.DEBUGGER);
-      }
-    };
-    intervals.push(setInterval(check, config.checkInterval * 5));
-  }
-
   function keyboardInterception() {
     if (!config.blockKeyboard) return;
     document.addEventListener('keydown', function (e) {
@@ -238,7 +222,6 @@
     keyboardInterception();
     consoleDetection();
     viewportDetection();
-    debuggerDetection();
 
     global.DevToolsTerminator = {
       version: VERSION,

@@ -2,7 +2,7 @@
 
 > A lightweight browser security library that detects and prevents Developer Tools access by terminating the session.
 
-![Version](https://img.shields.io/badge/version-0.1.1-blue)
+![Version](https://img.shields.io/badge/version-0.1.2-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![npm](https://img.shields.io/npm/v/devtools-terminator)](https://www.npmjs.com/package/devtools-terminator)
 ![npm weekly](https://img.shields.io/npm/dw/devtools-terminator)
@@ -45,7 +45,6 @@ Part of the **GimiRick** toolchain. We build open source LLMs and AI systems. Fo
 
 - **Console detection** — secretly monitors console access via a property getter trap
 - **Viewport differential** — detects DevTools docked to the side or bottom
-- **Debugger timing** — measures execution delay when Sources panel is active
 - **Keyboard interception** — blocks F12, Ctrl+Shift+I/J/C, Ctrl+U and macOS equivalents
 - **UI protection** — disables right-click, text selection, and drag-and-drop
 - **Full storage wipe** — clears localStorage, sessionStorage, cookies, IndexedDB, CacheStorage
@@ -469,10 +468,6 @@ A specially crafted object is created in memory with a property whose getter fun
 
 When DevTools are docked to the side or bottom of the browser window, the visible page area (inner dimensions) shrinks while the overall browser window size (outer dimensions) stays the same. The tool continuously measures the difference between these two values. When the gap exceeds a defined pixel threshold (200px), it signals that a panel has been attached — indicating DevTools. This check is automatically skipped on mobile devices to avoid false positives.
 
-### Debugger Statement Timing
-
-A `debugger` statement, when evaluated in a browser with DevTools closed, executes and resolves in under a millisecond. When DevTools are open and the Sources panel is active, the same statement causes a measurable pause. The tool times this execution and flags it as a detection event if the pause exceeds the defined threshold (100ms). This runs at a lower frequency than the other two checks to conserve CPU.
-
 ### Termination Sequence
 
 When any detection method fires, the following happens in strict order:
@@ -577,39 +572,11 @@ For detailed guidelines, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Changelog
 
-## [0.1.1] — 2026-07-05
+## [0.1.2] — 2026-07-06
 
-### Added
+### Removed
 
-- Per-IP rate limiting on heartbeat, terminate, and session endpoints
-- Request body size limits to prevent OOM attacks (configurable, default 10KB)
-- Structured JSON logging with level filtering (`error`/`warn`/`info`/`debug`) and custom logger support
-- Server middleware configuration docs with all options documented
-- Mac OS DevTools shortcut interception (`Cmd+Option+I/J/C`) via `e.altKey` check
-- `fetch({ keepalive: true })` fallback for hybrid heartbeat and termination beacons when `navigator.sendBeacon` is unavailable
-
-### Fixed
-
-- Server middleware `config`/`logger` no longer shared across middleware instances — each `createMiddleware()` call now has isolated configuration
-- `terminatedSessions` store no longer leaks memory — entries now cleaned up when stale
-- Client `debuggerDetection()` no longer throws `ReferenceError` when `performance` global is unavailable
-- Rate limiter internal bucket cache no longer leaks memory — periodic cleanup of expired entries
-- Request body accumulation stops immediately after exceeding `maxBodySize`, preventing memory waste
-- CLI `--dir` flag no longer interprets the next flag as a directory path
-- `timingSafeEqual` no longer crashes on invalid hex signatures — wrapped in try/catch with buffer length validation
-- Oversized payloads now destroy the socket (`req.destroy()`) to prevent resource exhaustion attacks
-- F12 keycode corrected from `112` (F1) to `123` (F12) in both client files
-- Subdomain cookie deletion logic reworked to correctly target all parent domain levels, including naked domains
-- Hybrid `sendTerminationBeacon()` now returns a `Promise` so the termination sequence can await beacon delivery before navigating
-- Hybrid termination race condition fixed — navigation waits for beacon delivery with a 500ms safety timeout
-- Async storage wipe race condition fixed — `location.replace()` now fires after a 100ms delay so IndexedDB, CacheStorage, and ServiceWorker deletions complete before page navigation
-- `document.domain` usage replaced with `window.location.hostname` for modern browser compatibility
-- `__DEVTOLS_TERMINATOR_CONFIG__` typo fixed in CLI output, documentation, and example files while preserving backward-compatible fallback in client code
-- Configuration variable now primarily reads `__DEVTOOLS_TERMINATOR_CONFIG__` (correct spelling) with `__DEVTOLS_TERMINATOR_CONFIG__` kept as a backward-compatible fallback
-- Initialization guard now checks both `__DEVTOOLS_TERMINATOR_INITIALIZED__` (correct) and `__DEVTOLS_TERMINATOR_INITIALIZED__` (legacy fallback)
-- Environment variable name in server production error message corrected from `DEVTOLS_SECRET` to `DEVTOOLS_SECRET`
-- Unused `vm` module import removed from unit tests
-
+- Debugger timing detection removed entirely — caused false positives on Chromium-based browsers
 
 For full version history, see `docs/CHANGELOG.md`.
 

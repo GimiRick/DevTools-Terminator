@@ -42,7 +42,7 @@ npm install devtools-terminator
 const devtoolsMiddleware = require('devtools-terminator/server');
 
 app.use('/api/devtools', devtoolsMiddleware({
-  sharedSecret: process.env.DEVTOLS_SECRET
+  sharedSecret: process.env.DEVTOOLS_SECRET
 }));
 ```
 

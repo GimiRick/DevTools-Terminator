@@ -1,6 +1,6 @@
 {
   "name": "devtools-terminator",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A lightweight browser security library that detects and prevents Developer Tools access by terminating the session",
   "main": "src/client/devtools-terminator.js",
   "browser": "src/client/devtools-terminator.js",

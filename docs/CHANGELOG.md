@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.2] — 2026-07-06
+
+### Removed
+
+- Debugger timing detection removed entirely — caused false positives on Chromium-based browsers
+
 ## [0.1.1] — 2026-07-05
 
 ### Added

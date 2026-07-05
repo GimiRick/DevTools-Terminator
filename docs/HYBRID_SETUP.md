@@ -27,7 +27,7 @@ const devtoolsMiddleware = require('devtools-terminator/server');
 const app = express();
 
 const middleware = devtoolsMiddleware({
-  sharedSecret: process.env.DEVTOLS_SECRET,
+  sharedSecret: process.env.DEVTOOLS_SECRET,
   onTermination: (data) => {
     // Log to database, send webhook, etc.
     console.log('Terminated:', data.sessionId);
@@ -65,7 +65,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Create a `.env` file:
 
 ```
-DEVTOLS_SECRET=your-generated-64-char-hex-string
+DEVTOOLS_SECRET=your-generated-64-char-hex-string
 PORT=3000
 NODE_ENV=development
 ```

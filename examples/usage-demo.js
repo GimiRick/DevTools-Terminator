@@ -75,7 +75,7 @@ window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
 // var app = express();
 //
 // app.use('/api/devtools', devtoolsMiddleware({
-//   sharedSecret: process.env.DEVTOLS_SECRET,
+//   sharedSecret: process.env.DEVTOOLS_SECRET,
 //   onTermination: function (data) {
 //     console.log('Termination event:', data);
 //   }
