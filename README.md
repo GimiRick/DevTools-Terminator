@@ -9,7 +9,7 @@
 ![npm monthly](https://img.shields.io/npm/dm/devtools-terminator)
 ![Node](https://img.shields.io/badge/node-%3E%3D20.19.0-brightgreen)
 
-DevTools Terminator detects when a user opens browser Developer Tools and immediately terminates their session — wiping all locally stored data and redirecting to a termination page. It uses three independent detection mechanisms, keyboard interception, and full storage sanitization.
+DevTools Terminator detects when a user opens browser Developer Tools and immediately terminates their session by wiping all locally stored data and redirecting to a termination page. It uses two independent detection mechanisms, keyboard interception, and full storage sanitization.
 
 The entire library is written in **pure JavaScript** with zero runtime dependencies for the client.
 
@@ -62,7 +62,7 @@ All Client-Only features, plus:
 - **Script integrity verification** — server validates the hash of the running script
 - **Replay attack protection** — timestamp-validated payloads with configurable window
 - **Server-enforced termination** — terminated sessions cannot access protected routes
-- **Termination beacon** — fire-and-forget notification via Navigator Beacon API
+- **Termination beacon** — fire-and-forget notification via `fetch({ keepalive: true })` (with `navigator.sendBeacon` fallback)
 - **Audit logging** — server-side security event hooks for custom alerting
 - **Memory management** — automatic cleanup of stale and terminated sessions
 - **Rate limiting** — per-IP throttling on heartbeat, terminate, and session endpoints
@@ -124,16 +124,16 @@ This installs the Express dependency required for Hybrid server mode. The client
 │                       │   │                   │     │   server.js)             │
 │   ┌───────────────┐   │   │  ┌────────────┐   │     │                          │
 │   │ Detection     │   │   │  │ Detection  │   │     │  ┌────────────────────┐  │
-│   │ Mechanisms    │   │   │  │ Mechanisms │   │     │  │ Routes             │  │
-│   │               │   │   │  │ (same 3)   │   │     │  │                    │  │
-│   │ • Console     │   │   │ └─────┬──────┘    │     │  │ POST /heartbeat    │  │
+│   │ Mechanisms    │   │   │  │ Mechanisms │   │     │  │      Routes        │  │
+│   │               │   │   │  │ (same)     │   │     │  │                    │  │
+│   │ • Console     │   │   │  └─────┬──────┘   │     │  │ POST /heartbeat    │  │
 │   │   Getter Trap │   │   │        │          │     │  │ POST /terminate    │  │
 │   │ • Viewport    │   │   │        ▼          │     │  │ GET  /session      │  │
 │   │   W+H Diff    │   │   │  ┌─────────────┐  │     │  │ 403 Check (all)    │  │
 │   │   (150/170px) │   │   │  │ Heartbeat   │  │     │  └────────────────────┘  │
 │   │ • Keyboard    │   │   │  │ System      │  │     │                          │
-│   │ • Keyboard    │   │   │  │             │  │     │  ┌────────────────────┐  │
-│   │   Interception│   │   │  │ HMAC-SHA256 │  │     │  │ Session Store      │  │
+│   │   Interception│   │   │  │             │  │     │  ┌────────────────────┐  │
+│   │               │   │   │  │ HMAC-SHA256 │  │     │  │ Session Store      │  │
 │   │               │   │   │  │             │  │     │  │ (in-memory)        │  │
 │   └───────┬───────┘   │   │  │ Fingerprint │  │     │  │ (in-memory)        │  │
 │           │           │   │  │ Script Hash │  │     │  │                    │  │
@@ -143,7 +143,7 @@ This installs the Express dependency required for Hybrid server mode. The client
 │  │ Sequence      │    │   │         ▼         │     │  │ scriptHash         │  │
 │  │               │    │   │  ┌─────────────┐  │     │  └────────────────────┘  │
 │  │ 1. Atomic flag│    │   │  │ Beacon      │  │     │                          │
-│  │ 2. Clear      │    │   │  │ (sendBeacon)│  │     │  ┌────────────────────┐  │
+│  │ 2. Clear      │    │   │  │ (keepalive) │  │     │  ┌────────────────────┐  │
 │  │    intervals  │    │   │  │ fire-and-   │  │     │  │ Security Hooks     │  │
 │  │ 3. Callback   │    │   │  │ forget      │  │     │  │                    │  │
 │  │ 4. Wipe all   │    │   │  └─────────────┘  │     │  │ onTermination()    │  │
@@ -194,7 +194,7 @@ This installs the Express dependency required for Hybrid server mode. The client
 │                        PUBLIC API                                           │
 │           window.DevToolsTerminator (frozen read-only)                      │
 │                                                                             │
-│  version  │  isTerminated()  │  terminate()  │  config                      │
+│  version  │  isTerminated()  │  terminate()  │  config  │  _status()        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -395,7 +395,7 @@ Configure the library by defining `window.__DEVTOOLS_TERMINATOR_CONFIG__` before
 | `blockInteractions` | `boolean` | `true` | Block right-click, text selection, and drag |
 | `disableOnMobile` | `boolean` | `true` | Suppress checks on mobile devices |
 | `onTermination` | `function` | `null` | Callback executed on detection (receives reason code) |
-| `hybridMode` | `boolean` | `false` | Enable heartbeat system (Hybrid only) |
+| `hybridMode` | `boolean` | `true` | Enable heartbeat system (Hybrid only) |
 | `serverEndpoint` | `string` | `''` | Server URL for heartbeats and beacons (Hybrid only) |
 | `sharedSecret` | `string` | `''` | HMAC key matching server config (Hybrid only) |
 
@@ -525,6 +525,7 @@ After initialization, the library exposes a read-only API on `window.DevToolsTer
 | `isTerminated()` | `function` | Returns `true` if the session has been terminated |
 | `terminate()` | `function` | Manually triggers the full termination sequence |
 | `config` | `object` | Read-only reference to the active configuration |
+| `_status()` | `function` | Returns diagnostic info: viewport dimensions, mobile state, interval count |
 
 ---
 
@@ -534,15 +535,27 @@ After initialization, the library exposes a read-only API on `window.DevToolsTer
 | --- | --- | --- | --- |
 | Firefox | 88+ | Windows, macOS, Linux | Full support |
 | Safari | 14+ | macOS, iOS | Full support |
-| Microsoft Edge | 90+ | Windows, macOS | Full support |
-| Opera | 76+ | Windows, macOS | Full support |
+| Microsoft Edge | 90+ | Windows, macOS | Partial (see note) |
+| Opera | 76+ | Windows, macOS | Partial (see note) |
 | Chrome | Desktop | Windows, macOS | Partial (see note) |
 | Chrome Mobile | Latest | Android | Full support |
-| Brave | Latest | All | Full support |
-| Vivaldi | Latest | All | Full support |
-| Arc | Latest | macOS | Full support |
+| Brave | Latest | All | Not supported (see note below) |
+| Vivaldi | Latest | All | Partial (see note) |
+| Arc | Latest | macOS | Partial (see note) |
 
-**Note on Chrome:** Chrome's no-op console stub (DevTools closed) does not evaluate getters on logged objects — the getter trap only fires when DevTools processes the buffered log entry. Repeated `console.log(obj)` every 100ms ensures a fresh entry is always in the ring buffer. Viewport detection provides the primary detection path for Chrome, catching both side-docked (150px width diff) and bottom-docked (170px height diff) DevTools. Undocked DevTools in a separate window remain a known fundamental limitation of JavaScript-based detection.
+**Note on Chromium-based browsers (Chrome, Edge, Opera, Vivaldi, Arc):** Chromium's no-op console stub (DevTools closed) does not evaluate getters on logged objects — the getter trap only fires when DevTools processes the buffered log entry. Repeated `console.log(obj)` every 100ms ensures a fresh entry is always in the ring buffer. Viewport detection provides the primary detection path on these browsers, catching both side-docked (150px width diff) and bottom-docked (170px height diff) DevTools. Undocked DevTools in a separate window remain a known fundamental limitation of JavaScript-based detection. This applies to all Chromium-based browsers listed above; they share the same DevTools console implementation.
+
+**Note on Brave (Shields feature):** This library does **not** work on Brave Browser when its built-in **Shields** feature is enabled (Shields is enabled by default on Brave). Shields is Brave's privacy protection layer that blocks trackers and prevents browser fingerprinting. Multiple Shields protections directly interfere with the library's detection mechanisms:
+
+1. **`window.outerWidth` / `window.outerHeight` spoofing** (viewport detection breakage): Brave Shields replaces these APIs with static, spoofed values (approximately 982×620) that do not reflect the actual browser window dimensions. The library's viewport differential detection relies on comparing `outerWidth - innerWidth > 150` and `outerHeight - innerHeight > 170` to detect docked DevTools. Since Brave Shields freezes these values regardless of DevTools state, the viewport check never triggers. [Confirmed by Brave Community bug report.](https://community.brave.app/t/brave-shields-modifies-window-screenx-window-screeny-window-outerwidth-and-window-outerheight-causing-incorrect-window-coordinates-to-be-reported/654684)
+
+2. **API farbling (fingerprinting randomization)**: Brave's fingerprinting protection (farbling) randomizes or blocks dozens of browser APIs per session and per site. The hybrid mode browser fingerprint (SHA-256 hash of `navigator.userAgent` + `screen.width` x `screen.height` + `Intl.DateTimeFormat` timezone) produces inconsistent values because Brave spoofs `userAgent`, `screen.width`, and `screen.height`. This breaks the cryptographic heartbeat fingerprint binding.
+
+3. **Console API modifications**: Brave Shields can alter how the console buffers and evaluates logged objects, potentially breaking the console getter trap detection mechanism.
+
+Since Shields is enabled by default on all pages in Brave, the library is effectively non-functional on this browser unless the user manually disables Shields for the site (click the lion icon in the address bar → toggle Shields off). This is a deliberate browser-level privacy protection that cannot be bypassed by JavaScript.
+
+Other Chromium-based browsers (Chrome, Edge, Opera, Vivaldi, Arc) do not have Brave's Shields fingerprinting protection and function as described in the Chromium note above — viewport detection works, console detection works when DevTools is open, but the console getter trap is subject to the same Chromium no-op stub limitation.
 
 ---
 
@@ -563,6 +576,7 @@ DevTools Terminator is a **deterrent layer**, not a replacement for server-side 
 - Users who disable JavaScript (mitigated by the noscript fallback)
 - Users who modify the script before it loads (mitigated by the hybrid script integrity check)
 - Browser extensions that modify page content
+- Browsers with built-in fingerprinting protection that spoofs window dimension APIs (e.g., Brave Shields)
 - Proxy-based traffic interception
 - Physical access attacks
 

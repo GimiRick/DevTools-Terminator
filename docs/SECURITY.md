@@ -19,6 +19,7 @@ DevTools Terminator is a **deterrent layer**, not a replacement for server-side 
 - Proxy-based traffic interception and modification
 - Physical access attacks (keyloggers, screen recording)
 - Browser extensions that modify page content
+- Browsers with built-in fingerprinting protection that spoofs window dimension APIs (e.g., Brave Shields)
 
 ## Defense in Depth
 

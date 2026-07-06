@@ -32,7 +32,7 @@
 - Structured JSON logging with level filtering (`error`/`warn`/`info`/`debug`) and custom logger support
 - Server middleware configuration docs with all options documented
 - Mac OS DevTools shortcut interception (`Cmd+Option+I/J/C`) via `e.altKey` check
-- `fetch({ keepalive: true })` fallback for hybrid heartbeat and termination beacons when `navigator.sendBeacon` is unavailable
+- `navigator.sendBeacon` fallback for hybrid heartbeat and termination beacons when `fetch` is unavailable; `fetch({ keepalive: true })` preferred
 
 ### Fixed
 

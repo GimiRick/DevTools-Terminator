@@ -12,7 +12,7 @@ Browser                          Server
   |<-- status: ok -----------------|
   |                                |
   |-- [DevTools detected]          |
-  |-- terminate beacon ----------->|  Fire-and-forget via sendBeacon
+  |-- terminate beacon ----------->|  Fire-and-forget via fetch keepalive (with sendBeacon fallback)
   |                                |  Marks session as terminated
   |                                |
   |-- request to /api/protected -->|  403 FORBIDDEN (session dead)
