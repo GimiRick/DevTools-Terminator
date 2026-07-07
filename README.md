@@ -62,6 +62,7 @@ All Client-Only features, plus:
 - **Script integrity verification** — server validates the hash of the running script
 - **Replay attack protection** — timestamp-validated payloads with configurable window
 - **Server-enforced termination** — terminated sessions cannot access protected routes
+- **Fingerprint & IP blocking** — terminated sessions block the originating device fingerprint and IP, preventing bypass by requesting a new session ID
 - **Termination beacon** — fire-and-forget notification via `fetch({ keepalive: true })` (with `navigator.sendBeacon` fallback)
 - **Audit logging** — server-side security event hooks for custom alerting
 - **Memory management** — automatic cleanup of stale and terminated sessions
@@ -464,6 +465,8 @@ const devtoolsMiddleware = devtoolsTerminator({
 
 When no custom logger is provided, the middleware writes JSON-formatted log entries to stdout (info, debug) and stderr (warn, error).
 
+If the default secret is detected at startup, the middleware automatically generates a random 32-byte HMAC secret and logs a warning. Always configure a unique `sharedSecret` for multi-instance or production deployments.
+
 ---
 
 ## How It Works
@@ -593,6 +596,8 @@ DevTools Terminator is a **deterrent layer**, not a replacement for server-side 
 - Automated scrapers that rely on DevTools APIs
 - Brute-force and DoS attacks against server endpoints (via rate limiting)
 - Memory exhaustion via oversized request bodies (via body size limits)
+- Replay attacks (via HMAC timestamp validation with NaN-guarded window checking)
+- Prototype pollution via crafted session IDs or IPs (stores use `Object.create(null)` and `Map`)
 
 **What it does NOT protect against:**
 
@@ -604,6 +609,12 @@ DevTools Terminator is a **deterrent layer**, not a replacement for server-side 
 - Physical access attacks
 
 For production applications, combine this tool with server-side authentication, Content Security Policy, Subresource Integrity, HTTPS, and backend authorization. See [`SECURITY.md`](SECURITY.md) for our security policy or `docs/SECURITY.md` for a full discussion.
+
+The server middleware is hardened against common web attacks:
+- **Prototype pollution** — all internal stores use `Map` or `Object.create(null)`, blocking `__proto__` key injection
+- **Type coercion attacks** — HMAC payload fields and session IDs are explicitly cast to `String()` before validation; non-string session IDs are rejected with strict `typeof` checking
+- **Replay bypass via NaN** — `Number()` + `isNaN()` guard on timestamps prevents payload replay with non-numeric timestamps
+- **Express body-parser compatible** — gracefully handles pre-parsed `req.body` from `express.json()` or other body parsers
 
 ---
 

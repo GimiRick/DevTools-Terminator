@@ -14,8 +14,10 @@ Browser                          Server
   |-- [DevTools detected]          |
   |-- terminate beacon ----------->|  Fire-and-forget via fetch keepalive (with sendBeacon fallback)
   |                                |  Marks session as terminated
+  |                                |  Blocks fingerprint + IP
   |                                |
-  |-- request to /api/protected -->|  403 FORBIDDEN (session dead)
+  |-- [bypass attempt: new session]|
+  |-- request to /api/protected -->|  403 FORBIDDEN (fingerprint/IP blocked)
 ```
 
 ## Server Setup
@@ -75,3 +77,5 @@ NODE_ENV=development
 - The shared secret must match on both client and server.
 - If the default secret is detected, the server auto-generates a random 32-byte secret with a warning. Always configure a unique `sharedSecret` for production.
 - Use HTTPS in production to prevent secret exposure.
+- When a session is terminated, the server blocks both the originating **browser fingerprint** (SHA-256 hash of UA + screen + timezone) and **IP address**. This prevents bypass by requesting a new session ID from the same device or network.
+- The server uses `Map` and `Object.create(null)` for all internal stores, providing inherent protection against prototype pollution via crafted session IDs or IPs.
