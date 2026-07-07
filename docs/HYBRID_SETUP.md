@@ -4,7 +4,7 @@ Hybrid mode adds server-enforced session security to the DevTools Terminator. Th
 
 ## Architecture
 
-```
+```text
 Browser                          Server
   |                                |
   |-- heartbeat (every 30s) ------>|  HMAC-SHA256 signed payload
@@ -66,7 +66,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 Create a `.env` file:
 
-```
+```bash
 DEVTOOLS_SECRET=your-generated-64-char-hex-string
 PORT=3000
 NODE_ENV=development
