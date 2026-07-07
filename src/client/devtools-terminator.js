@@ -15,8 +15,9 @@
     terminationURL: '/terminated.html',
     windowSizeCheck: true,
     blockKeyboard: true,
-    blockInteractions: true,
+    blockInteractions: false,
     disableOnMobile: true,
+    destructiveClear: false,
     onTermination: null
   };
 
@@ -53,6 +54,10 @@
   }
 
   function clearAllStorage() {
+    if (!config.destructiveClear) {
+      console.warn('[DevToolsTerminator] DevTools detected. Storage was NOT cleared (destructiveClear is false).');
+      return;
+    }
     try { localStorage.clear(); } catch (e) {}
     try { sessionStorage.clear(); } catch (e) {}
     try {

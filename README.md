@@ -620,26 +620,60 @@ For detailed guidelines, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Changelog
 
-## [0.1.2] — 2026-07-06
+## [0.1.2] — 2026-07-07
 
 ### Added (0.1.2)
 
-- Viewport detection checks both width (150px) and height (170px), every 100ms
-- Viewport delta tracking with outer dimension stability check
-- `DevToolsTerminator._status()` diagnostic method
-- Repeated `console.log(obj)` every 100ms (keeps live entry in Chrome's ring buffer)
+- `fetchWithTimeout(url, opts, timeoutMs)` helper with `AbortController` — hybrid fetch calls now time out after 5 seconds instead of hanging indefinitely
+- Session ID transmitted via `X-Session-ID` header (preferred) with `sendBeacon` query param fallback — avoids leaking session IDs into server access logs, proxy logs, and browser history via URL
+- ESLint `no-restricted-syntax` rules to enforce `var` over `let`/`const` in client files; `caughtErrors: 'none'` added to `no-unused-vars` rule
+- Hybrid mode startup warning when page is not served over HTTPS — `crypto.subtle` and `fetch` require secure context
+- `destructiveClear` config option (default `false`) — storage wiping (localStorage, sessionStorage, cookies, IndexedDB, caches, service workers) on termination is now opt-in to prevent accidental data loss
+- `createMemoryStore()` — structured store interface using `Map` for session and termination data with built-in fingerprint and IP blocking support
+- Fingerprint and IP blocking on termination — terminated sessions now block the originating fingerprint and IP, preventing bypass by requesting a new session ID from the same device or network
+- Chunked cleanup (5,000 sessions per tick) — prevents event loop blocking when cleaning large session stores
+- Integration test (`test/verification-simulation.js`) — end-to-end server simulation validating the termination flow and IP blocking persistence
+- Viewport detection now checks both width (150px) and height (170px) — catches side-docked DevTools on Chrome/Chromium (width check safely above browser chrome, below typical extension sidebar widths)
+- Viewport detection interval reduced from 1000ms to 100ms for near-instant response
+- Viewport delta tracking with outer dimension stability check (catches mid-session docking)
+- `DevToolsTerminator._status()` diagnostic method — returns current viewport dimensions, `isMobile`, `windowSizeCheck` state and other debug info
+- Repeated `console.log(obj)` every 100ms keeps a live entry in Chrome's ring buffer (was once during init; the single entry could be evicted before DevTools opens)
 
 ### Fixed
 
-- `isMobile()` now uses `navigator.maxTouchPoints > 0` instead of `'ontouchstart' in global` — fixes Chrome/Mac false positive that disabled viewport detection
-- Viewport width check restored at 150px threshold (avoids narrow extension sidebar false positives while catching all DevTools)
-- Viewport height threshold set to 170px (safely clears max browser chrome height)
+- **Prototype pollution hardening**: rate-limiting `buckets` now use `Object.create(null)` instead of plain objects (`{}`), preventing prototype pollution via crafted IP keys. Session and termination stores migrated to `Map` which is inherently immune to prototype pollution
+- **Payload timestamp replay bypass**: `Number(data.timestamp)` with `isNaN(payloadAge)` guard prevents NaN-based replay window bypass. Previously, a non-numeric timestamp produced `NaN` in `now - data.timestamp`, and `NaN > cfg.replayWindow` is always `false`, allowing expired payloads to pass validation
+- **Type coercion in HMAC payload construction**: Explicit `String(data.fingerprint)`, `String(data.scriptHash)`, and `String(data.timestamp)` prevent signature validation bypass if an attacker sends non-string values that produce different stringification in payload vs. the client's calculation. `String(data.signature)` ensures `timingSafeEqual` receives a string even if the attacker sends a non-string signature
+- **Express body-parser compatibility**: The server middleware now gracefully handles requests that have already been processed by `express.json()` or other body parsers. By checking `req.body` instead of solely relying on `req.on('data')`, requests no longer hang indefinitely on consumed streams
+- **Session ID type validation**: Enforced strict string validation (`typeof id === 'string'`) in `extractSessionId()`. This prevents type coercion bugs (e.g., `"[object Object]"`) if an attacker maliciously passes arrays via duplicate query parameters like `?session=1&session=2`
+- **Performance: Dual redundant 100ms intervals merged into single 200ms interval** — both client and hybrid scripts had two separate `setInterval` timers each running at 100ms, both doing the same viewport + console detection work. Merged into one 200ms tick, reducing function call overhead by ~75% with no detection latency regression. The combined interval started at 250ms in initial implementation but was reduced to 200ms after testing confirmed Chrome's ring buffer reliability at shorter intervals
+- **Critical hybrid sendBeacon regression**: session ID was dropped from `sendBeacon` fallback path during header migration — `sendBeacon` cannot send custom headers, so query param restoration was required for this code path
+- **Shared `'anonymous'` session ID collision**: heartbeat and terminate handlers used `'anonymous'` as fallback session ID when none was provided — all anonymous sessions shared the same key, causing cross-session state corruption. Changed to `generateSessionId()` for unique per-session identification
+- Hybrid client `fetch` calls no longer fail silently — all `.catch()` handlers now log errors via `console.warn` instead of empty function bodies
+- `validateConfig()` no longer clobbers falsy-but-valid configuration values (e.g., `logLevel: ''`) — now uses `!= null` instead of `||` for default application
+- Production guard now auto-generates a random 32-byte secret with a warning instead of crashing — more graceful, with a warning about multi-instance deployments
+- `req.path` fallback (`|| req.url`) removed — Express 5.x always provides `req.path`; `req.url` in older Express included query strings which could break path matching
+- Fragile unit test pattern simplified — default-secret test no longer guarded behind `createSession` existence check, removing conditional test execution
+- **Critical Chrome/Mac false positive in `isMobile()`**: switched from `'ontouchstart' in global` (always `true` on Chrome/Mac due to Touch Bar event support) to `navigator.maxTouchPoints > 0` (only `true` on actual touch hardware). On Chrome/Mac, `isMobile()` was returning `true`, which disabled viewport detection entirely via `disableOnMobile` — meaning NO detection mechanism was active on Chrome/Mac
+- Viewport thresholds adjusted: width 150px, height 170px — balanced to avoid extension sidebar false positives while reliably detecting DevTools
+- Restored width-docked DevTools detection (was removed due to false positives from sidebar extensions at lower thresholds; 150px threshold avoids narrow extensions while catching all DevTools ≥200px)
+- Height threshold set to 170px to safely clear Firefox power-user chrome (~165px max)
+
+### Changed
+
+- `blockInteractions` default changed from `true` to `false` — right-click blocking, text selection prevention, and drag protection are now opt-in. Sites behave more naturally unless explicitly configured
+- `clearAllStorage()` gated behind `destructiveClear: true` — storage wiping on termination is now opt-in to prevent accidental data loss. A warning is logged when termination triggers but `destructiveClear` is `false`
+- Session store migrated from plain objects to `createMemoryStore()` using `Map` — better dynamic key handling, built-in fingerprint and IP blocking, chunked cleanup (5,000 sessions per tick), and a clean store interface
+- `validateConfig()` production guard changed from crashing to auto-generating a random secret with a warning — more graceful and preserves the running instance while alerting the operator
+- Server middleware refactored from module-level singleton stores to instance-scoped stores with `instances[]` registry — each `createMiddleware()` call now has fully isolated session and termination stores, preventing cross-instance state leaks when running multiple server instances
+- Server module exposed additional exports: `createSession`, `getSessionStore`, `getTerminatedSessions` — backward compatible, all existing call patterns continue to work
 
 ### Removed
 
-- `SEC_DEVTOOLS_FORMAT_005` reason code (dead code from earlier removed format probe)
-- `console.clear()` from detection interval
-- Debugger timing detection
+- Legacy `__DEVTOLS_TERMINATOR_CONFIG__` and `__DEVTOLS_TERMINATOR_INITIALIZED__` fallback properties have been completely removed from client files to prevent accidental use of misspelled variables
+- `SEC_DEVTOOLS_FORMAT_005` reason code (format probe function was already removed in an earlier iteration; constant was dead code)
+- `console.clear()` removed from detection — was potentially interfering with Chrome's ring buffer processing
+- Debugger timing detection removed entirely — caused false positives on Chromium-based browsers
 
 For full version history, see `docs/CHANGELOG.md`.
 

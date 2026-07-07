@@ -111,11 +111,11 @@ function validateConfig(userConfig) {
   cfg.logLevel = cfg.logLevel != null ? cfg.logLevel : DEFAULT_LOG_LEVEL;
   cfg.logger = typeof cfg.logger === 'function' ? cfg.logger : null;
 
-  if (process.env.NODE_ENV === 'production' && (cfg.sharedSecret === DEFAULT_SECRET || cfg.sharedSecret === ENV_EXAMPLE_DEFAULT)) {
-    throw new Error(
-      'DevToolsTerminator: Default shared secret detected in production environment. ' +
-      'Set a unique shared secret via config or the DEVTOOLS_SECRET environment variable.'
-    );
+  if (cfg.sharedSecret === DEFAULT_SECRET || cfg.sharedSecret === ENV_EXAMPLE_DEFAULT) {
+    var generated = crypto.randomBytes(32).toString('hex');
+    cfg.sharedSecret = generated;
+    console.warn('[DevToolsTerminator] WARNING: Default sharedSecret detected. A random 32-byte secret has been generated automatically for this instance.');
+    console.warn('[DevToolsTerminator] WARNING: This is NOT safe for multi-instance (cluster/serverless) deployments. Please configure sharedSecret.');
   }
 
   return cfg;
@@ -132,13 +132,112 @@ function extractSessionId(req) {
   return typeof id === 'string' ? id : null;
 }
 
+// Structured Store Interface with Memory implementation
+function createMemoryStore(staleThreshold) {
+  var sessions = new Map();
+  var terminatedSessions = new Map();
+  var blockedFingerprints = new Map();
+  var lastCleanupIterator = null;
+
+  return {
+    createSession: function (sessionId) {
+      sessions.set(sessionId, {
+        lastHeartbeat: Date.now(),
+        terminated: false,
+        fingerprint: null,
+        scriptHash: null,
+        ip: null
+      });
+    },
+    getSession: function (sessionId) {
+      return sessions.get(sessionId);
+    },
+    updateSession: function (sessionId, data) {
+      var session = sessions.get(sessionId);
+      if (session) {
+        for (var k in data) session[k] = data[k];
+      } else {
+        sessions.set(sessionId, data);
+      }
+    },
+    terminateSession: function (sessionId, fingerprint, ip) {
+      var session = sessions.get(sessionId);
+      if (session) session.terminated = true;
+      terminatedSessions.set(sessionId, Date.now());
+      if (fingerprint) blockedFingerprints.set(fingerprint, Date.now());
+      if (ip) blockedFingerprints.set('ip:' + ip, Date.now());
+    },
+    isTerminated: function (sessionId, fingerprint, ip) {
+      if (sessionId && terminatedSessions.has(sessionId)) return true;
+      if (fingerprint && blockedFingerprints.has(fingerprint)) return true;
+      if (ip && blockedFingerprints.has('ip:' + ip)) return true;
+      return false;
+    },
+    cleanup: function (log) {
+      var now = Date.now();
+      var cleaned = [];
+      var count = 0;
+      var chunkSize = 5000;
+
+      if (!lastCleanupIterator) {
+        lastCleanupIterator = sessions.entries();
+      }
+
+      var result = lastCleanupIterator.next();
+      while (!result.done && count < chunkSize) {
+        var id = result.value[0];
+        var session = result.value[1];
+        if (terminatedSessions.has(id)) {
+          sessions.delete(id);
+          cleaned.push({ sessionId: id, reason: 'terminated' });
+        } else if (now - session.lastHeartbeat > staleThreshold) {
+          sessions.delete(id);
+          cleaned.push({ sessionId: id, reason: 'stale' });
+        }
+        count++;
+        result = lastCleanupIterator.next();
+      }
+
+      if (result.done) {
+        lastCleanupIterator = null; // Reset for next tick
+      }
+
+      for (var tid of terminatedSessions.keys()) {
+        if (now - terminatedSessions.get(tid) > staleThreshold) {
+          terminatedSessions.delete(tid);
+        }
+      }
+
+      for (var blockKey of blockedFingerprints.keys()) {
+        if (now - blockedFingerprints.get(blockKey) > staleThreshold * 2) {
+          blockedFingerprints.delete(blockKey);
+        }
+      }
+
+      if (cleaned.length > 0 && log) {
+        log.debug('sessions_cleaned', { count: cleaned.length, sessions: cleaned });
+      }
+    },
+    _getRawSessions: function() {
+      var obj = {};
+      sessions.forEach(function(v, k) { obj[k] = v; });
+      return obj;
+    },
+    _getRawTerminated: function() {
+      var obj = {};
+      terminatedSessions.forEach(function(v, k) { obj[k] = v; });
+      return obj;
+    }
+  };
+}
+
 function createMiddleware(userConfig) {
   var cfg = validateConfig(userConfig);
   var log = createLogger(cfg);
 
+  var store = createMemoryStore(cfg.staleThreshold);
   var instance = {
-    sessions: Object.create(null),
-    terminatedSessions: Object.create(null),
+    store: store,
     cleanupTimer: null
   };
   instances.push(instance);
@@ -148,7 +247,7 @@ function createMiddleware(userConfig) {
   var sessionLimiter = createRateLimiter(cfg.rateLimitWindow, cfg.rateLimitSession);
 
   instance.cleanupTimer = setInterval(function () {
-    cleanupStaleSessions(cfg.staleThreshold, log, instance.sessions, instance.terminatedSessions);
+    store.cleanup(log);
   }, cfg.cleanupInterval);
   if (instance.cleanupTimer.unref) instance.cleanupTimer.unref();
 
@@ -174,7 +273,7 @@ function createMiddleware(userConfig) {
         log.warn('rate_limit_exceeded', { endpoint: '/heartbeat', ip: ip });
         return res.status(429).json({ error: 'Too many requests', retryAfter: hbReset });
       }
-      return handleHeartbeat(req, res, cfg, log, instance.sessions, instance.terminatedSessions);
+      return handleHeartbeat(req, res, cfg, log, store);
     }
 
     if (path === '/terminate' && req.method === 'POST') {
@@ -184,7 +283,7 @@ function createMiddleware(userConfig) {
         log.warn('rate_limit_exceeded', { endpoint: '/terminate', ip: ip });
         return res.status(429).json({ error: 'Too many requests', retryAfter: tReset });
       }
-      return handleTerminate(req, res, cfg, log, instance.sessions, instance.terminatedSessions);
+      return handleTerminate(req, res, cfg, log, store);
     }
 
     if (path === '/session' && req.method === 'GET') {
@@ -194,11 +293,12 @@ function createMiddleware(userConfig) {
         log.warn('rate_limit_exceeded', { endpoint: '/session', ip: ip });
         return res.status(429).json({ error: 'Too many requests', retryAfter: sReset });
       }
-      return handleCreateSession(req, res, instance.sessions);
+      return handleCreateSession(req, res, store);
     }
 
     var sessionId = extractSessionId(req);
-    if (sessionId && instance.terminatedSessions[sessionId]) {
+    // Enforce termination blocks
+    if (store.isTerminated(sessionId, null, ip)) {
       return res.status(403).json({
         error: 'Session terminated',
         code: 'SESSION_TERMINATED'
@@ -209,32 +309,32 @@ function createMiddleware(userConfig) {
   };
 }
 
-function handleCreateSession(req, res, sessions) {
+function handleCreateSession(req, res, store) {
   var sessionId = generateSessionId();
-  sessions[sessionId] = {
-    lastHeartbeat: Date.now(),
-    terminated: false,
-    fingerprint: null,
-    scriptHash: null
-  };
+  store.createSession(sessionId);
   res.json({ sessionId: sessionId });
 }
 
-function processHeartbeatData(data, req, res, cfg, log, sessions, ip) {
+function processHeartbeatData(data, req, res, cfg, log, store, ip) {
   var sessionId = extractSessionId(req) || data.sessionId || generateSessionId();
 
   if (!data.fingerprint || !data.timestamp || !data.signature) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  var payload = data.fingerprint + ':' + (data.scriptHash || '') + ':' + data.timestamp;
+  // Ensure primitives to avoid object coercion stringification bugs
+  var fp = String(data.fingerprint);
+  var sh = data.scriptHash ? String(data.scriptHash) : '';
+  var ts = String(data.timestamp);
+
+  var payload = fp + ':' + sh + ':' + ts;
 
   var expectedSig = crypto
     .createHmac('sha256', cfg.sharedSecret)
     .update(payload)
     .digest('hex');
 
-  if (!timingSafeEqual(data.signature, expectedSig)) {
+  if (!timingSafeEqual(String(data.signature), expectedSig)) {
     log.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/heartbeat' });
     if (cfg.onTermination) {
       try {
@@ -250,30 +350,24 @@ function processHeartbeatData(data, req, res, cfg, log, sessions, ip) {
   }
 
   var now = Date.now();
-  var payloadAge = now - data.timestamp;
-  if (payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
+  var payloadAge = now - Number(data.timestamp);
+  if (isNaN(payloadAge) || payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
     log.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
     return res.status(403).json({ error: 'Payload expired' });
   }
 
-  if (!sessions[sessionId]) {
-    sessions[sessionId] = {
-      lastHeartbeat: now,
-      terminated: false,
-      fingerprint: data.fingerprint,
-      scriptHash: data.scriptHash || null
-    };
-  } else {
-    sessions[sessionId].lastHeartbeat = now;
-    sessions[sessionId].fingerprint = data.fingerprint;
-    sessions[sessionId].scriptHash = data.scriptHash || null;
-  }
+  store.updateSession(sessionId, {
+    lastHeartbeat: now,
+    fingerprint: fp,
+    scriptHash: sh || null,
+    ip: ip
+  });
 
   if (cfg.onHeartbeat) {
     try {
       cfg.onHeartbeat({
         sessionId: sessionId,
-        fingerprint: data.fingerprint,
+        fingerprint: fp,
         timestamp: now
       });
     } catch (e) {}
@@ -282,11 +376,11 @@ function processHeartbeatData(data, req, res, cfg, log, sessions, ip) {
   res.json({ status: 'ok' });
 }
 
-function handleHeartbeat(req, res, cfg, log, sessions, terminatedSessions) {
+function handleHeartbeat(req, res, cfg, log, store) {
   var ip = req.ip || req.socket.remoteAddress;
 
   if (req.body && typeof req.body === 'object') {
-    return processHeartbeatData(req.body, req, res, cfg, log, sessions, ip);
+    return processHeartbeatData(req.body, req, res, cfg, log, store, ip);
   }
 
   var body = '';
@@ -311,28 +405,30 @@ function handleHeartbeat(req, res, cfg, log, sessions, terminatedSessions) {
     if (aborted) return;
     try {
       var data = JSON.parse(body);
-      processHeartbeatData(data, req, res, cfg, log, sessions, ip);
+      processHeartbeatData(data, req, res, cfg, log, store, ip);
     } catch (e) {
       res.status(400).json({ error: 'Invalid JSON' });
     }
   });
 }
 
-function processTerminateData(data, req, res, cfg, log, sessions, terminatedSessions, ip) {
+function processTerminateData(data, req, res, cfg, log, store, ip) {
   var sessionId = extractSessionId(req) || data.sessionId || generateSessionId();
 
   if (!data.fingerprint || !data.timestamp || !data.signature) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  var payload = data.fingerprint + '::' + data.timestamp;
+  var fp = String(data.fingerprint);
+  var ts = String(data.timestamp);
+  var payload = fp + '::' + ts;
 
   var expectedSig = crypto
     .createHmac('sha256', cfg.sharedSecret)
     .update(payload)
     .digest('hex');
 
-  if (!timingSafeEqual(data.signature, expectedSig)) {
+  if (!timingSafeEqual(String(data.signature), expectedSig)) {
     log.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/terminate' });
     if (cfg.onTermination) {
       try {
@@ -348,22 +444,19 @@ function processTerminateData(data, req, res, cfg, log, sessions, terminatedSess
   }
 
   var now = Date.now();
-  var payloadAge = now - data.timestamp;
-  if (payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
+  var payloadAge = now - Number(data.timestamp);
+  if (isNaN(payloadAge) || payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
     log.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
     return res.status(403).json({ error: 'Payload expired' });
   }
 
-  if (sessions[sessionId]) {
-    sessions[sessionId].terminated = true;
-  }
-  terminatedSessions[sessionId] = Date.now();
+  store.terminateSession(sessionId, fp, ip);
 
   if (cfg.onTermination) {
     try {
       cfg.onTermination({
         sessionId: sessionId,
-        reason: data.reason || 'SEC_DEVTOOLS_UNKNOWN',
+        reason: data.reason ? String(data.reason) : 'SEC_DEVTOOLS_UNKNOWN',
         timestamp: now,
         ip: ip
       });
@@ -373,11 +466,11 @@ function processTerminateData(data, req, res, cfg, log, sessions, terminatedSess
   res.json({ status: 'terminated' });
 }
 
-function handleTerminate(req, res, cfg, log, sessions, terminatedSessions) {
+function handleTerminate(req, res, cfg, log, store) {
   var ip = req.ip || req.socket.remoteAddress;
 
   if (req.body && typeof req.body === 'object') {
-    return processTerminateData(req.body, req, res, cfg, log, sessions, terminatedSessions, ip);
+    return processTerminateData(req.body, req, res, cfg, log, store, ip);
   }
 
   var body = '';
@@ -402,52 +495,24 @@ function handleTerminate(req, res, cfg, log, sessions, terminatedSessions) {
     if (aborted) return;
     try {
       var data = JSON.parse(body);
-      processTerminateData(data, req, res, cfg, log, sessions, terminatedSessions, ip);
+      processTerminateData(data, req, res, cfg, log, store, ip);
     } catch (e) {
       res.status(400).json({ error: 'Invalid JSON' });
     }
   });
 }
 
-function cleanupStaleSessions(threshold, log, sessions, terminatedSessions) {
-  var now = Date.now();
-  var staleThreshold = threshold || STALE_THRESHOLD;
-  var cleaned = [];
-
-  for (var id in sessions) {
-    if (Object.prototype.hasOwnProperty.call(sessions, id)) {
-      if (terminatedSessions[id]) {
-        delete sessions[id];
-        cleaned.push({ sessionId: id, reason: 'terminated' });
-      } else if (now - sessions[id].lastHeartbeat > staleThreshold) {
-        delete sessions[id];
-        cleaned.push({ sessionId: id, reason: 'stale' });
-      }
-    }
-  }
-
-  for (var tid in terminatedSessions) {
-    if (Object.prototype.hasOwnProperty.call(terminatedSessions, tid) && now - terminatedSessions[tid] > staleThreshold) {
-      delete terminatedSessions[tid];
-    }
-  }
-
-  if (cleaned.length > 0 && log) {
-    log.debug('sessions_cleaned', { count: cleaned.length, sessions: cleaned });
-  }
-}
-
 module.exports = createMiddleware;
 module.exports.createSession = function (req, res) {
   if (instances.length > 0) {
-    handleCreateSession(req, res, instances[0].sessions);
+    handleCreateSession(req, res, instances[0].store);
   } else {
     res.status(500).json({ error: 'No middleware instance initialized' });
   }
 };
 module.exports.getSessionStore = function () {
-  return instances.length > 0 ? instances[0].sessions : {};
+  return instances.length > 0 ? instances[0].store._getRawSessions() : {};
 };
 module.exports.getTerminatedSessions = function () {
-  return instances.length > 0 ? instances[0].terminatedSessions : {};
+  return instances.length > 0 ? instances[0].store._getRawTerminated() : {};
 };
