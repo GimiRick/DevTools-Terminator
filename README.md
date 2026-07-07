@@ -515,6 +515,27 @@ The server cannot cryptographically tell the difference between a real browser a
 
 ---
 
+### Session State Machine (Server)
+
+```
+Client                          Server
+  |                               |
+  |-- GET /session -------------->|  Creates session entry (active)
+  |<-- { sessionId } ------------|
+  |                               |
+  |-- POST /heartbeat (30s) ---->|  Validates HMAC, timestamp, updates lastHeartbeat
+  |<-- { status: 'ok' } ---------|
+  |                               |
+  |-- POST /terminate ---------->|  Marks session.terminated = true
+  |                               |  Adds to terminatedSessions
+  |                               |
+  |-- GET /api/* --------------->|  Checks terminatedSessions → 403 if terminated
+  |                               |
+  |--- [45s no heartbeat] -------|  cleanupStaleSessions() removes entry
+```
+
+---
+
 ## Public API Reference
 
 After initialization, the library exposes a read-only API on `window.DevToolsTerminator`:
