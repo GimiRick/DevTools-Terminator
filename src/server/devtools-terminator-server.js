@@ -32,13 +32,13 @@ function timingSafeEqual(a, b) {
 }
 
 function createRateLimiter(windowMs, maxHits) {
-  var buckets = {};
+  var buckets = Object.create(null);
   var lastCleanup = Date.now();
   return function (key) {
     if (Date.now() - lastCleanup > windowMs) {
       var cleanupNow = Date.now();
       for (var k in buckets) {
-        if (buckets.hasOwnProperty(k) && cleanupNow >= buckets[k].resetAt) {
+        if (Object.prototype.hasOwnProperty.call(buckets, k) && cleanupNow >= buckets[k].resetAt) {
           delete buckets[k];
         }
       }
@@ -70,7 +70,7 @@ function createLogger(cfg) {
     };
     if (data) {
       for (var key in data) {
-        if (data.hasOwnProperty(key)) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
           entry[key] = data[key];
         }
       }
@@ -126,9 +126,10 @@ function generateSessionId() {
 }
 
 function extractSessionId(req) {
-  if (req.headers['x-session-id']) return req.headers['x-session-id'];
-  if (req.query && req.query.session) return req.query.session;
-  return null;
+  var id = null;
+  if (req.headers['x-session-id']) id = req.headers['x-session-id'];
+  else if (req.query && req.query.session) id = req.query.session;
+  return typeof id === 'string' ? id : null;
 }
 
 function createMiddleware(userConfig) {
@@ -136,8 +137,8 @@ function createMiddleware(userConfig) {
   var log = createLogger(cfg);
 
   var instance = {
-    sessions: {},
-    terminatedSessions: {},
+    sessions: Object.create(null),
+    terminatedSessions: Object.create(null),
     cleanupTimer: null
   };
   instances.push(instance);
@@ -219,11 +220,78 @@ function handleCreateSession(req, res, sessions) {
   res.json({ sessionId: sessionId });
 }
 
+function processHeartbeatData(data, req, res, cfg, log, sessions, ip) {
+  var sessionId = extractSessionId(req) || data.sessionId || generateSessionId();
+
+  if (!data.fingerprint || !data.timestamp || !data.signature) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  var payload = data.fingerprint + ':' + (data.scriptHash || '') + ':' + data.timestamp;
+
+  var expectedSig = crypto
+    .createHmac('sha256', cfg.sharedSecret)
+    .update(payload)
+    .digest('hex');
+
+  if (!timingSafeEqual(data.signature, expectedSig)) {
+    log.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/heartbeat' });
+    if (cfg.onTermination) {
+      try {
+        cfg.onTermination({
+          sessionId: sessionId,
+          reason: 'SEC_DEVTOOLS_INVALID_SIG',
+          timestamp: Date.now(),
+          ip: ip
+        });
+      } catch (e) {}
+    }
+    return res.status(403).json({ error: 'Invalid signature', code: 'SEC_DEVTOOLS_INVALID_SIG' });
+  }
+
+  var now = Date.now();
+  var payloadAge = now - data.timestamp;
+  if (payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
+    log.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
+    return res.status(403).json({ error: 'Payload expired' });
+  }
+
+  if (!sessions[sessionId]) {
+    sessions[sessionId] = {
+      lastHeartbeat: now,
+      terminated: false,
+      fingerprint: data.fingerprint,
+      scriptHash: data.scriptHash || null
+    };
+  } else {
+    sessions[sessionId].lastHeartbeat = now;
+    sessions[sessionId].fingerprint = data.fingerprint;
+    sessions[sessionId].scriptHash = data.scriptHash || null;
+  }
+
+  if (cfg.onHeartbeat) {
+    try {
+      cfg.onHeartbeat({
+        sessionId: sessionId,
+        fingerprint: data.fingerprint,
+        timestamp: now
+      });
+    } catch (e) {}
+  }
+
+  res.json({ status: 'ok' });
+}
+
 function handleHeartbeat(req, res, cfg, log, sessions, terminatedSessions) {
+  var ip = req.ip || req.socket.remoteAddress;
+
+  if (req.body && typeof req.body === 'object') {
+    return processHeartbeatData(req.body, req, res, cfg, log, sessions, ip);
+  }
+
   var body = '';
   var aborted = false;
   var maxSize = cfg.maxBodySize;
-  var ip = req.ip || req.socket.remoteAddress;
   req.on('data', function (chunk) {
     if (aborted) return;
     body += chunk;
@@ -243,76 +311,78 @@ function handleHeartbeat(req, res, cfg, log, sessions, terminatedSessions) {
     if (aborted) return;
     try {
       var data = JSON.parse(body);
-      var sessionId = extractSessionId(req) || data.sessionId || generateSessionId();
-
-      if (!data.fingerprint || !data.timestamp || !data.signature) {
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
-
-      var payload = data.fingerprint + ':' + (data.scriptHash || '') + ':' + data.timestamp;
-
-      var expectedSig = crypto
-        .createHmac('sha256', cfg.sharedSecret)
-        .update(payload)
-        .digest('hex');
-
-      if (!timingSafeEqual(data.signature, expectedSig)) {
-        log.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/heartbeat' });
-        if (cfg.onTermination) {
-          try {
-            cfg.onTermination({
-              sessionId: sessionId,
-              reason: 'SEC_DEVTOOLS_INVALID_SIG',
-              timestamp: Date.now(),
-              ip: ip
-            });
-          } catch (e) {}
-        }
-        return res.status(403).json({ error: 'Invalid signature', code: 'SEC_DEVTOOLS_INVALID_SIG' });
-      }
-
-      var now = Date.now();
-      var payloadAge = now - data.timestamp;
-      if (payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
-        log.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
-        return res.status(403).json({ error: 'Payload expired' });
-      }
-
-      if (!sessions[sessionId]) {
-        sessions[sessionId] = {
-          lastHeartbeat: now,
-          terminated: false,
-          fingerprint: data.fingerprint,
-          scriptHash: data.scriptHash || null
-        };
-      } else {
-        sessions[sessionId].lastHeartbeat = now;
-        sessions[sessionId].fingerprint = data.fingerprint;
-        sessions[sessionId].scriptHash = data.scriptHash || null;
-      }
-
-      if (cfg.onHeartbeat) {
-        try {
-          cfg.onHeartbeat({
-            sessionId: sessionId,
-            fingerprint: data.fingerprint,
-            timestamp: now
-          });
-        } catch (e) {}
-      }
-
-      res.json({ status: 'ok' });
+      processHeartbeatData(data, req, res, cfg, log, sessions, ip);
     } catch (e) {
       res.status(400).json({ error: 'Invalid JSON' });
     }
   });
 }
 
+function processTerminateData(data, req, res, cfg, log, sessions, terminatedSessions, ip) {
+  var sessionId = extractSessionId(req) || data.sessionId || generateSessionId();
+
+  if (!data.fingerprint || !data.timestamp || !data.signature) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  var payload = data.fingerprint + '::' + data.timestamp;
+
+  var expectedSig = crypto
+    .createHmac('sha256', cfg.sharedSecret)
+    .update(payload)
+    .digest('hex');
+
+  if (!timingSafeEqual(data.signature, expectedSig)) {
+    log.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/terminate' });
+    if (cfg.onTermination) {
+      try {
+        cfg.onTermination({
+          sessionId: sessionId,
+          reason: 'SEC_DEVTOOLS_INVALID_SIG',
+          timestamp: Date.now(),
+          ip: ip
+        });
+      } catch (e) {}
+    }
+    return res.status(403).json({ error: 'Invalid signature', code: 'SEC_DEVTOOLS_INVALID_SIG' });
+  }
+
+  var now = Date.now();
+  var payloadAge = now - data.timestamp;
+  if (payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
+    log.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
+    return res.status(403).json({ error: 'Payload expired' });
+  }
+
+  if (sessions[sessionId]) {
+    sessions[sessionId].terminated = true;
+  }
+  terminatedSessions[sessionId] = Date.now();
+
+  if (cfg.onTermination) {
+    try {
+      cfg.onTermination({
+        sessionId: sessionId,
+        reason: data.reason || 'SEC_DEVTOOLS_UNKNOWN',
+        timestamp: now,
+        ip: ip
+      });
+    } catch (e) {}
+  }
+
+  res.json({ status: 'terminated' });
+}
+
 function handleTerminate(req, res, cfg, log, sessions, terminatedSessions) {
+  var ip = req.ip || req.socket.remoteAddress;
+
+  if (req.body && typeof req.body === 'object') {
+    return processTerminateData(req.body, req, res, cfg, log, sessions, terminatedSessions, ip);
+  }
+
   var body = '';
   var aborted = false;
   var maxSize = cfg.maxBodySize;
-  var ip = req.ip || req.socket.remoteAddress;
   req.on('data', function (chunk) {
     if (aborted) return;
     body += chunk;
@@ -332,58 +402,7 @@ function handleTerminate(req, res, cfg, log, sessions, terminatedSessions) {
     if (aborted) return;
     try {
       var data = JSON.parse(body);
-      var sessionId = extractSessionId(req) || data.sessionId || generateSessionId();
-
-      if (!data.fingerprint || !data.timestamp || !data.signature) {
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
-
-      var payload = data.fingerprint + '::' + data.timestamp;
-
-      var expectedSig = crypto
-        .createHmac('sha256', cfg.sharedSecret)
-        .update(payload)
-        .digest('hex');
-
-      if (!timingSafeEqual(data.signature, expectedSig)) {
-        log.error('invalid_signature', { sessionId: sessionId, ip: ip, endpoint: '/terminate' });
-        if (cfg.onTermination) {
-          try {
-            cfg.onTermination({
-              sessionId: sessionId,
-              reason: 'SEC_DEVTOOLS_INVALID_SIG',
-              timestamp: Date.now(),
-              ip: ip
-            });
-          } catch (e) {}
-        }
-        return res.status(403).json({ error: 'Invalid signature', code: 'SEC_DEVTOOLS_INVALID_SIG' });
-      }
-
-      var now = Date.now();
-      var payloadAge = now - data.timestamp;
-      if (payloadAge > cfg.replayWindow || payloadAge < -cfg.replayWindow) {
-        log.warn('payload_expired', { sessionId: sessionId, ip: ip, payloadAge: payloadAge });
-        return res.status(403).json({ error: 'Payload expired' });
-      }
-
-      if (sessions[sessionId]) {
-        sessions[sessionId].terminated = true;
-      }
-      terminatedSessions[sessionId] = Date.now();
-
-      if (cfg.onTermination) {
-        try {
-          cfg.onTermination({
-            sessionId: sessionId,
-            reason: data.reason || 'SEC_DEVTOOLS_UNKNOWN',
-            timestamp: now,
-            ip: ip
-          });
-        } catch (e) {}
-      }
-
-      res.json({ status: 'terminated' });
+      processTerminateData(data, req, res, cfg, log, sessions, terminatedSessions, ip);
     } catch (e) {
       res.status(400).json({ error: 'Invalid JSON' });
     }
@@ -396,7 +415,7 @@ function cleanupStaleSessions(threshold, log, sessions, terminatedSessions) {
   var cleaned = [];
 
   for (var id in sessions) {
-    if (sessions.hasOwnProperty(id)) {
+    if (Object.prototype.hasOwnProperty.call(sessions, id)) {
       if (terminatedSessions[id]) {
         delete sessions[id];
         cleaned.push({ sessionId: id, reason: 'terminated' });
@@ -408,7 +427,7 @@ function cleanupStaleSessions(threshold, log, sessions, terminatedSessions) {
   }
 
   for (var tid in terminatedSessions) {
-    if (terminatedSessions.hasOwnProperty(tid) && now - terminatedSessions[tid] > staleThreshold) {
+    if (Object.prototype.hasOwnProperty.call(terminatedSessions, tid) && now - terminatedSessions[tid] > staleThreshold) {
       delete terminatedSessions[tid];
     }
   }

@@ -34,7 +34,7 @@
   }
 
   function loadConfig() {
-    var userConfig = global.__DEVTOOLS_TERMINATOR_CONFIG__ || global.__DEVTOLS_TERMINATOR_CONFIG__ || {};
+    var userConfig = global.__DEVTOOLS_TERMINATOR_CONFIG__ || {};
     if (config !== null) return config;
     config = {};
     for (var key in DEFAULTS) {
@@ -233,7 +233,7 @@
   }
 
   function init() {
-    if (global.__DEVTOOLS_TERMINATOR_INITIALIZED__ || global.__DEVTOLS_TERMINATOR_INITIALIZED__) return;
+    if (global.__DEVTOOLS_TERMINATOR_INITIALIZED__) return;
     global.__DEVTOOLS_TERMINATOR_INITIALIZED__ = true;
 
     loadConfig();

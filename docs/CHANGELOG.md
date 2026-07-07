@@ -16,6 +16,9 @@
 
 ### Fixed
 
+- **Critical prototype pollution vulnerability**: `sessions`, `terminatedSessions`, and rate-limiting `buckets` now use `Object.create(null)` instead of plain objects (`{}`). This completely neutralizes prototype pollution attacks where an attacker could send a `sessionId` of `"__proto__"` to inject properties globally across the Node.js process.
+- **Express body-parser compatibility**: The server middleware now gracefully handles requests that have already been processed by `express.json()` or other body parsers. By checking `req.body` instead of solely relying on `req.on('data')`, requests no longer hang indefinitely on consumed streams.
+- **Session ID type validation**: Enforced strict string validation (`typeof id === 'string'`) in `extractSessionId()`. This prevents type coercion bugs (e.g., `"[object Object]"`) if an attacker maliciously passes arrays via duplicate query parameters like `?session=1&session=2`.
 - **Performance: Dual redundant 100ms intervals merged into single 200ms interval** — both client and hybrid scripts had two separate `setInterval` timers each running at 100ms, both doing the same viewport + console detection work. Merged into one 200ms tick, reducing function call overhead by ~75% with no detection latency regression. The combined interval started at 250ms in initial implementation but was reduced to 200ms after testing confirmed Chrome's ring buffer reliability at shorter intervals
 - **Critical hybrid sendBeacon regression**: session ID was dropped from `sendBeacon` fallback path during header migration — `sendBeacon` cannot send custom headers, so query param restoration was required for this code path
 - **Shared `'anonymous'` session ID collision**: heartbeat and terminate handlers used `'anonymous'` as fallback session ID when none was provided — all anonymous sessions shared the same key, causing cross-session state corruption. Changed to `generateSessionId()` for unique per-session identification
@@ -36,6 +39,7 @@
 
 ### Removed
 
+- Legacy `__DEVTOLS_TERMINATOR_CONFIG__` and `__DEVTOLS_TERMINATOR_INITIALIZED__` fallback properties have been completely removed from client files to prevent accidental use of misspelled variables
 - `SEC_DEVTOOLS_FORMAT_005` reason code (format probe function was already removed in an earlier iteration; constant was dead code)
 - `console.clear()` removed from detection — was potentially interfering with Chrome's ring buffer processing
 - Debugger timing detection removed entirely — caused false positives on Chromium-based browsers
