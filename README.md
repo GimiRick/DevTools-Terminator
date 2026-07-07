@@ -43,8 +43,8 @@ Part of the **GimiRick** toolchain. We build open source LLMs and AI systems. Fo
 
 ### Client-Only Mode
 
-- **Console getter trap** — monitors console access via a property getter on a plain object, logged every 100ms (keeps a live entry in Chrome's ring buffer)
-- **Viewport differential** — detects DevTools docked to the side (150px width diff) or bottom (170px height diff), checked every 100ms
+- **Console getter trap** — monitors console access via a property getter on a plain object, logged every 200ms (keeps a live entry in Chrome's ring buffer)
+- **Viewport differential** — detects DevTools docked to the side (150px width diff) or bottom (170px height diff), checked every 200ms
 - **Keyboard interception** — blocks F12, Ctrl+Shift+I/J/C, Ctrl+U and macOS equivalents
 - **UI protection** — disables right-click, text selection, and drag-and-drop
 - **Full storage wipe** — clears localStorage, sessionStorage, cookies, IndexedDB, CacheStorage
@@ -392,30 +392,32 @@ Configure the library by defining `window.__DEVTOOLS_TERMINATOR_CONFIG__` before
 | `terminationURL` | `string` | `'/terminated.html'` | URL to redirect to on detection |
 | `windowSizeCheck` | `boolean` | `true` | Enable viewport differential detection |
 | `blockKeyboard` | `boolean` | `true` | Intercept DevTools keyboard shortcuts |
-| `blockInteractions` | `boolean` | `true` | Block right-click, text selection, and drag |
+| `blockInteractions` | `boolean` | `false` | Block right-click, text selection, and drag |
 | `disableOnMobile` | `boolean` | `true` | Suppress checks on mobile devices |
+| `destructiveClear` | `boolean` | `false` | Wipe all browser storage (localStorage, sessionStorage, cookies, IndexedDB, CacheStorage, Service Workers) on termination |
 | `onTermination` | `function` | `null` | Callback executed on detection (receives reason code) |
 | `hybridMode` | `boolean` | `true` | Enable heartbeat system (Hybrid only) |
 | `serverEndpoint` | `string` | `''` | Server URL for heartbeats and beacons (Hybrid only) |
 | `sharedSecret` | `string` | `''` | HMAC key matching server config (Hybrid only) |
 
 ```html
-<!-- Block everything (default) -->
+<!-- Default config (keyboard blocked, interactions allowed) -->
 <script>
   window.__DEVTOOLS_TERMINATOR_CONFIG__ = {};
 </script>
 
-<!-- Allow right-click, text selection, and drag (keep keyboard blocking) -->
+<!-- Block interactions (right-click, text selection, drag) in addition to keyboard -->
 <script>
   window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
-    blockInteractions: false
+    blockInteractions: true
   };
 </script>
 
-<!-- Allow keyboard shortcuts (keep right-click etc. blocked) -->
+<!-- Allow keyboard shortcuts (keep interactions blocked) -->
 <script>
   window.__DEVTOOLS_TERMINATOR_CONFIG__ = {
-    blockKeyboard: false
+    blockKeyboard: false,
+    blockInteractions: true
   };
 </script>
 
@@ -468,13 +470,13 @@ When no custom logger is provided, the middleware writes JSON-formatted log entr
 
 ### Console Object Property Getter
 
-A plain object with an enumerable getter property is logged to the console every 100ms. When DevTools is closed, Chrome's console no-op stub stores a reference without evaluating the object's properties — the getter never fires. When DevTools opens and processes the buffered log entry, Chrome evaluates the object for display, triggering the getter and initiating termination.
+A plain object with an enumerable getter property is logged to the console every 200ms. When DevTools is closed, Chrome's console no-op stub stores a reference without evaluating the object's properties — the getter never fires. When DevTools opens and processes the buffered log entry, Chrome evaluates the object for display, triggering the getter and initiating termination.
 
 On Firefox, getters are evaluated eagerly even during no-op stub processing, making this approach cross-browser compatible.
 
 ### Viewport Dimension Differential
 
-Two static checks run every 100ms:
+Two static checks run every 200ms:
 
 - **Width:** `outerWidth - innerWidth > 150` — catches DevTools docked to the right side. A 150px threshold safely clears extension sidebars (typically 50–120px) while reliably catching all DevTools panels (≥200px).
 - **Height:** `outerHeight - innerHeight > 170` — catches DevTools docked to the bottom. The threshold is safely above browser chrome (typically 70–136px on Windows/Mac).

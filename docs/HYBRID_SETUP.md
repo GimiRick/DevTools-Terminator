@@ -73,5 +73,5 @@ NODE_ENV=development
 ## Security Notes
 
 - The shared secret must match on both client and server.
-- In production, `NODE_ENV=production` causes the middleware to throw if the default secret is detected.
+- If the default secret is detected, the server auto-generates a random 32-byte secret with a warning. Always configure a unique `sharedSecret` for production.
 - Use HTTPS in production to prevent secret exposure.
