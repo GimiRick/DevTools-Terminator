@@ -14,10 +14,10 @@
 - Chunked cleanup (5,000 sessions per tick) — prevents event loop blocking when cleaning large session stores
 - Integration test (`test/verification-simulation.js`) — end-to-end server simulation validating the termination flow and IP blocking persistence
 - Viewport detection now checks both width (150px) and height (170px) — catches side-docked DevTools on Chrome/Chromium (width check safely above browser chrome, below typical extension sidebar widths)
-- Viewport detection interval reduced from 1000ms to 100ms for near-instant response
+- Viewport detection interval reduced from 1000ms to 100ms for near-instant response (later merged with duplicate console timer to 200ms — see Fixed section)
 - Viewport delta tracking with outer dimension stability check (catches mid-session docking)
 - `DevToolsTerminator._status()` diagnostic method — returns current viewport dimensions, `isMobile`, `windowSizeCheck` state and other debug info
-- Repeated `console.log(obj)` every 100ms keeps a live entry in Chrome's ring buffer (was once during init; the single entry could be evicted before DevTools opens)
+- Repeated `console.log(obj)` keeps a live entry in Chrome's ring buffer (was once during init; the single entry could be evicted before DevTools opens; runs at 200ms after merging with viewport timer — see Fixed section)
 
 ### Fixed
 

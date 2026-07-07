@@ -9,7 +9,7 @@
 ![npm monthly](https://img.shields.io/npm/dm/devtools-terminator)
 ![Node](https://img.shields.io/badge/node-%3E%3D20.19.0-brightgreen)
 
-DevTools Terminator detects when a user opens browser Developer Tools and immediately terminates their session by wiping all locally stored data and redirecting to a termination page. It uses two independent detection mechanisms, keyboard interception, and full storage sanitization.
+DevTools Terminator detects when a user opens browser Developer Tools and immediately terminates their session by wiping all locally stored data and redirecting to a termination page. It uses two independent detection mechanisms (console getter trap and viewport differential), keyboard interception, and full storage sanitization.
 
 The entire library is written in **pure JavaScript** with zero runtime dependencies for the client.
 
