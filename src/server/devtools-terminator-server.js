@@ -3,6 +3,7 @@
 var crypto = require('crypto');
 
 var DEFAULT_SECRET = 'change-this-to-a-random-secret';
+var ENV_EXAMPLE_DEFAULT = 'change-this-to-a-random-64-char-hex-string';
 var STALE_THRESHOLD = 45000;
 var REPLAY_WINDOW = 10000;
 var CLEANUP_INTERVAL = 60000;
@@ -15,9 +16,7 @@ var DEFAULT_LOG_LEVEL = 'info';
 
 var LOG_LEVEL_MAP = { error: 0, warn: 1, info: 2, debug: 3 };
 
-var sessions = {};
-var terminatedSessions = {};
-var cleanupTimer = null;
+var instances = [];
 
 function timingSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
@@ -98,21 +97,21 @@ function createLogger(cfg) {
 
 function validateConfig(userConfig) {
   var cfg = userConfig || {};
-  cfg.sharedSecret = cfg.sharedSecret || DEFAULT_SECRET;
-  cfg.staleThreshold = cfg.staleThreshold || STALE_THRESHOLD;
-  cfg.replayWindow = cfg.replayWindow || REPLAY_WINDOW;
-  cfg.cleanupInterval = cfg.cleanupInterval || CLEANUP_INTERVAL;
+  cfg.sharedSecret = cfg.sharedSecret != null ? cfg.sharedSecret : DEFAULT_SECRET;
+  cfg.staleThreshold = cfg.staleThreshold != null ? cfg.staleThreshold : STALE_THRESHOLD;
+  cfg.replayWindow = cfg.replayWindow != null ? cfg.replayWindow : REPLAY_WINDOW;
+  cfg.cleanupInterval = cfg.cleanupInterval != null ? cfg.cleanupInterval : CLEANUP_INTERVAL;
   cfg.onTermination = typeof cfg.onTermination === 'function' ? cfg.onTermination : null;
   cfg.onHeartbeat = typeof cfg.onHeartbeat === 'function' ? cfg.onHeartbeat : null;
-  cfg.rateLimitWindow = cfg.rateLimitWindow || DEFAULT_RATE_LIMIT_WINDOW;
-  cfg.rateLimitHeartbeat = cfg.rateLimitHeartbeat || DEFAULT_RATE_LIMIT_HEARTBEAT;
-  cfg.rateLimitTerminate = cfg.rateLimitTerminate || DEFAULT_RATE_LIMIT_TERMINATE;
-  cfg.rateLimitSession = cfg.rateLimitSession || DEFAULT_RATE_LIMIT_SESSION;
-  cfg.maxBodySize = cfg.maxBodySize || DEFAULT_MAX_BODY_SIZE;
-  cfg.logLevel = cfg.logLevel || DEFAULT_LOG_LEVEL;
+  cfg.rateLimitWindow = cfg.rateLimitWindow != null ? cfg.rateLimitWindow : DEFAULT_RATE_LIMIT_WINDOW;
+  cfg.rateLimitHeartbeat = cfg.rateLimitHeartbeat != null ? cfg.rateLimitHeartbeat : DEFAULT_RATE_LIMIT_HEARTBEAT;
+  cfg.rateLimitTerminate = cfg.rateLimitTerminate != null ? cfg.rateLimitTerminate : DEFAULT_RATE_LIMIT_TERMINATE;
+  cfg.rateLimitSession = cfg.rateLimitSession != null ? cfg.rateLimitSession : DEFAULT_RATE_LIMIT_SESSION;
+  cfg.maxBodySize = cfg.maxBodySize != null ? cfg.maxBodySize : DEFAULT_MAX_BODY_SIZE;
+  cfg.logLevel = cfg.logLevel != null ? cfg.logLevel : DEFAULT_LOG_LEVEL;
   cfg.logger = typeof cfg.logger === 'function' ? cfg.logger : null;
 
-  if (process.env.NODE_ENV === 'production' && cfg.sharedSecret === DEFAULT_SECRET) {
+  if (process.env.NODE_ENV === 'production' && (cfg.sharedSecret === DEFAULT_SECRET || cfg.sharedSecret === ENV_EXAMPLE_DEFAULT)) {
     throw new Error(
       'DevToolsTerminator: Default shared secret detected in production environment. ' +
       'Set a unique shared secret via config or the DEVTOOLS_SECRET environment variable.'
@@ -127,8 +126,8 @@ function generateSessionId() {
 }
 
 function extractSessionId(req) {
-  if (req.query && req.query.session) return req.query.session;
   if (req.headers['x-session-id']) return req.headers['x-session-id'];
+  if (req.query && req.query.session) return req.query.session;
   return null;
 }
 
@@ -136,16 +135,21 @@ function createMiddleware(userConfig) {
   var cfg = validateConfig(userConfig);
   var log = createLogger(cfg);
 
+  var instance = {
+    sessions: {},
+    terminatedSessions: {},
+    cleanupTimer: null
+  };
+  instances.push(instance);
+
   var heartbeatLimiter = createRateLimiter(cfg.rateLimitWindow, cfg.rateLimitHeartbeat);
   var terminateLimiter = createRateLimiter(cfg.rateLimitWindow, cfg.rateLimitTerminate);
   var sessionLimiter = createRateLimiter(cfg.rateLimitWindow, cfg.rateLimitSession);
 
-  if (!cleanupTimer) {
-    cleanupTimer = setInterval(function () {
-      cleanupStaleSessions(cfg.staleThreshold, log);
-    }, cfg.cleanupInterval);
-    if (cleanupTimer.unref) cleanupTimer.unref();
-  }
+  instance.cleanupTimer = setInterval(function () {
+    cleanupStaleSessions(cfg.staleThreshold, log, instance.sessions, instance.terminatedSessions);
+  }, cfg.cleanupInterval);
+  if (instance.cleanupTimer.unref) instance.cleanupTimer.unref();
 
   log.info('middleware_initialized', {
     rateLimitWindow: cfg.rateLimitWindow,
@@ -169,7 +173,7 @@ function createMiddleware(userConfig) {
         log.warn('rate_limit_exceeded', { endpoint: '/heartbeat', ip: ip });
         return res.status(429).json({ error: 'Too many requests', retryAfter: hbReset });
       }
-      return handleHeartbeat(req, res, cfg, log);
+      return handleHeartbeat(req, res, cfg, log, instance.sessions, instance.terminatedSessions);
     }
 
     if (path === '/terminate' && req.method === 'POST') {
@@ -179,7 +183,7 @@ function createMiddleware(userConfig) {
         log.warn('rate_limit_exceeded', { endpoint: '/terminate', ip: ip });
         return res.status(429).json({ error: 'Too many requests', retryAfter: tReset });
       }
-      return handleTerminate(req, res, cfg, log);
+      return handleTerminate(req, res, cfg, log, instance.sessions, instance.terminatedSessions);
     }
 
     if (path === '/session' && req.method === 'GET') {
@@ -189,11 +193,11 @@ function createMiddleware(userConfig) {
         log.warn('rate_limit_exceeded', { endpoint: '/session', ip: ip });
         return res.status(429).json({ error: 'Too many requests', retryAfter: sReset });
       }
-      return handleCreateSession(req, res);
+      return handleCreateSession(req, res, instance.sessions);
     }
 
     var sessionId = extractSessionId(req);
-    if (sessionId && terminatedSessions[sessionId]) {
+    if (sessionId && instance.terminatedSessions[sessionId]) {
       return res.status(403).json({
         error: 'Session terminated',
         code: 'SESSION_TERMINATED'
@@ -204,7 +208,7 @@ function createMiddleware(userConfig) {
   };
 }
 
-function handleCreateSession(req, res) {
+function handleCreateSession(req, res, sessions) {
   var sessionId = generateSessionId();
   sessions[sessionId] = {
     lastHeartbeat: Date.now(),
@@ -215,7 +219,7 @@ function handleCreateSession(req, res) {
   res.json({ sessionId: sessionId });
 }
 
-function handleHeartbeat(req, res, cfg, log) {
+function handleHeartbeat(req, res, cfg, log, sessions, terminatedSessions) {
   var body = '';
   var aborted = false;
   var maxSize = cfg.maxBodySize;
@@ -304,7 +308,7 @@ function handleHeartbeat(req, res, cfg, log) {
   });
 }
 
-function handleTerminate(req, res, cfg, log) {
+function handleTerminate(req, res, cfg, log, sessions, terminatedSessions) {
   var body = '';
   var aborted = false;
   var maxSize = cfg.maxBodySize;
@@ -386,7 +390,7 @@ function handleTerminate(req, res, cfg, log) {
   });
 }
 
-function cleanupStaleSessions(threshold, log) {
+function cleanupStaleSessions(threshold, log, sessions, terminatedSessions) {
   var now = Date.now();
   var staleThreshold = threshold || STALE_THRESHOLD;
   var cleaned = [];
@@ -414,15 +418,17 @@ function cleanupStaleSessions(threshold, log) {
   }
 }
 
-function getSessionStore() {
-  return sessions;
-}
-
-function getTerminatedSessions() {
-  return terminatedSessions;
-}
-
 module.exports = createMiddleware;
-module.exports.createSession = handleCreateSession;
-module.exports.getSessionStore = getSessionStore;
-module.exports.getTerminatedSessions = getTerminatedSessions;
+module.exports.createSession = function (req, res) {
+  if (instances.length > 0) {
+    handleCreateSession(req, res, instances[0].sessions);
+  } else {
+    res.status(500).json({ error: 'No middleware instance initialized' });
+  }
+};
+module.exports.getSessionStore = function () {
+  return instances.length > 0 ? instances[0].sessions : {};
+};
+module.exports.getTerminatedSessions = function () {
+  return instances.length > 0 ? instances[0].terminatedSessions : {};
+};

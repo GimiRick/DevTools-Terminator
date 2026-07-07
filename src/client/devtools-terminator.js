@@ -127,7 +127,7 @@
     }, 100);
   }
 
-  function consoleDetection() {
+  function startDetection() {
     var obj = {};
     Object.defineProperty(obj, 'id', {
       get: function () {
@@ -137,15 +137,7 @@
       configurable: false,
       enumerable: true
     });
-    var check = function () {
-      if (terminated) return;
-      console.log(obj);
-    };
-    intervals.push(setInterval(check, 100));
-  }
 
-  function viewportDetection() {
-    if (!config.windowSizeCheck) return;
     var widthThreshold = 150;
     var heightThreshold = 170;
     var deltaThreshold = 100;
@@ -153,16 +145,24 @@
     var lastInnerHeight = global.innerHeight;
     var lastOuterWidth = global.outerWidth;
     var lastOuterHeight = global.outerHeight;
-    var check = function () {
+
+    var tick = function () {
       if (terminated) return;
+
+      console.log(obj);
+
+      if (!config.windowSizeCheck) return;
+
       var outerW = global.outerWidth;
       var outerH = global.outerHeight;
       var innerW = global.innerWidth;
       var innerH = global.innerHeight;
+
       if (outerW - innerW > widthThreshold || outerH - innerH > heightThreshold) {
         terminate(REASON_CODES.SIZE);
         return;
       }
+
       var deltaW = lastInnerWidth - innerW;
       var deltaH = lastInnerHeight - innerH;
       var outerDeltaW = Math.abs(outerW - lastOuterWidth);
@@ -171,12 +171,14 @@
         terminate(REASON_CODES.SIZE);
         return;
       }
+
       lastInnerWidth = innerW;
       lastInnerHeight = innerH;
       lastOuterWidth = outerW;
       lastOuterHeight = outerH;
     };
-    intervals.push(setInterval(check, 100));
+
+    intervals.push(setInterval(tick, 200));
   }
 
   function keyboardInterception() {
@@ -237,8 +239,7 @@
     loadConfig();
 
     keyboardInterception();
-    consoleDetection();
-    viewportDetection();
+    startDetection();
 
     global.DevToolsTerminator = {
       version: VERSION,

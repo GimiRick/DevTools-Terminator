@@ -97,6 +97,22 @@
     });
   }
 
+  function fetchWithTimeout(url, options, timeoutMs) {
+    if (typeof AbortController === 'undefined') {
+      return fetch(url, options);
+    }
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs || 5000);
+    options.signal = controller.signal;
+    return fetch(url, options).then(function (result) {
+      clearTimeout(timeoutId);
+      return result;
+    }, function (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    });
+  }
+
   function generateFingerprint() {
     var ua = navigator.userAgent;
     var sw = screen.width;
@@ -120,25 +136,28 @@
       scriptContent = scripts[0].textContent || '';
       return Promise.resolve(scriptContent);
     }
-    return fetch(src).then(function (res) {
+    return fetchWithTimeout(src, {}, 5000).then(function (res) {
       return res.text();
     }).then(function (text) {
       scriptContent = text;
       return text;
-    }).catch(function () {
+    }).catch(function (err) {
+      console.warn('[DevToolsTerminator] Failed to fetch script content:', err ? err.message : 'unknown');
       return '';
     });
   }
 
   function fetchSessionId() {
     if (!config.serverEndpoint) return Promise.resolve();
-    return fetch(config.serverEndpoint + '/session').then(function (res) {
+    return fetchWithTimeout(config.serverEndpoint + '/session', {}, 5000).then(function (res) {
       return res.json();
     }).then(function (data) {
       if (data && data.sessionId) {
         sessionId = data.sessionId;
       }
-    }).catch(function () {});
+    }).catch(function (err) {
+      console.warn('[DevToolsTerminator] Failed to fetch session ID:', err ? err.message : 'unknown');
+    });
   }
 
   function sendHeartbeat() {
@@ -165,13 +184,21 @@
       });
     }).then(function (body) {
       var url = config.serverEndpoint + '/heartbeat';
-      if (sessionId) url += '?session=' + encodeURIComponent(sessionId);
+      var opts = { method: 'POST', body: JSON.stringify(body), keepalive: true };
+      if (sessionId) {
+        opts.headers = { 'X-Session-ID': sessionId };
+        url += '?session=' + encodeURIComponent(sessionId);
+      }
       if (typeof fetch === 'function') {
-        fetch(url, { method: 'POST', body: JSON.stringify(body), keepalive: true }).catch(function () {});
+        fetchWithTimeout(url, opts, 5000).catch(function (err) {
+          console.warn('[DevToolsTerminator] Heartbeat failed:', err ? err.message : 'unknown');
+        });
       } else if (typeof navigator.sendBeacon === 'function') {
         navigator.sendBeacon(url, JSON.stringify(body));
       }
-    }).catch(function () {});
+    }).catch(function (err) {
+      console.warn('[DevToolsTerminator] Heartbeat preparation failed:', err ? err.message : 'unknown');
+    });
   }
 
   function sendTerminationBeacon() {
@@ -188,14 +215,22 @@
           reason: 'devtools_detected'
         });
         var url = config.serverEndpoint + '/terminate';
-        if (sessionId) url += '?session=' + encodeURIComponent(sessionId);
+        var opts = { method: 'POST', body: body, keepalive: true };
+        if (sessionId) {
+          opts.headers = { 'X-Session-ID': sessionId };
+          url += '?session=' + encodeURIComponent(sessionId);
+        }
         if (typeof fetch === 'function') {
-          fetch(url, { method: 'POST', body: body, keepalive: true }).catch(function () {});
+          fetchWithTimeout(url, opts, 5000).catch(function (err) {
+            console.warn('[DevToolsTerminator] Termination beacon failed:', err ? err.message : 'unknown');
+          });
         } else if (typeof navigator.sendBeacon === 'function') {
           navigator.sendBeacon(url, body);
         }
       });
-    }).catch(function () {});
+    }).catch(function (err) {
+      console.warn('[DevToolsTerminator] Termination beacon preparation failed:', err ? err.message : 'unknown');
+    });
   }
 
   function clearAllStorage() {
@@ -291,7 +326,7 @@
     }
   }
 
-  function consoleDetection() {
+  function startDetection() {
     var obj = {};
     Object.defineProperty(obj, 'id', {
       get: function () {
@@ -301,15 +336,7 @@
       configurable: false,
       enumerable: true
     });
-    var check = function () {
-      if (terminated) return;
-      console.log(obj);
-    };
-    intervals.push(setInterval(check, 100));
-  }
 
-  function viewportDetection() {
-    if (!config.windowSizeCheck) return;
     var widthThreshold = 150;
     var heightThreshold = 170;
     var deltaThreshold = 100;
@@ -317,16 +344,24 @@
     var lastInnerHeight = global.innerHeight;
     var lastOuterWidth = global.outerWidth;
     var lastOuterHeight = global.outerHeight;
-    var check = function () {
+
+    var tick = function () {
       if (terminated) return;
+
+      console.log(obj);
+
+      if (!config.windowSizeCheck) return;
+
       var outerW = global.outerWidth;
       var outerH = global.outerHeight;
       var innerW = global.innerWidth;
       var innerH = global.innerHeight;
+
       if (outerW - innerW > widthThreshold || outerH - innerH > heightThreshold) {
         terminate(REASON_CODES.SIZE);
         return;
       }
+
       var deltaW = lastInnerWidth - innerW;
       var deltaH = lastInnerHeight - innerH;
       var outerDeltaW = Math.abs(outerW - lastOuterWidth);
@@ -335,12 +370,14 @@
         terminate(REASON_CODES.SIZE);
         return;
       }
+
       lastInnerWidth = innerW;
       lastInnerHeight = innerH;
       lastOuterWidth = outerW;
       lastOuterHeight = outerH;
     };
-    intervals.push(setInterval(check, 100));
+
+    intervals.push(setInterval(tick, 200));
   }
 
   function keyboardInterception() {
@@ -407,11 +444,10 @@
     loadConfig();
 
     keyboardInterception();
-    consoleDetection();
-    viewportDetection();
+    startDetection();
 
     if (config.hybridMode && !isSecureContext()) {
-      console.warn('[DevToolsTerminator] Hybrid mode requires a secure context (HTTPS). Heartbeats will not function.');
+      console.error('[DevToolsTerminator] FAILED: Hybrid mode requires a secure context (HTTPS). Heartbeats and beacons will be silently rejected by the server. Switch to HTTPS or use client-only mode.');
     }
 
     fetchSessionId().then(function () {
