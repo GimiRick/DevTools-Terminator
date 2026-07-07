@@ -647,12 +647,12 @@ For detailed guidelines, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Chunked cleanup (5,000 sessions per tick) — prevents event loop blocking when cleaning large session stores
 - Integration test (`test/verification-simulation.js`) — end-to-end server simulation validating the termination flow and IP blocking persistence
 - Viewport detection now checks both width (150px) and height (170px) — catches side-docked DevTools on Chrome/Chromium (width check safely above browser chrome, below typical extension sidebar widths)
-- Viewport detection interval reduced from 1000ms to 100ms for near-instant response
+- Viewport detection interval reduced from 1000ms to 100ms for near-instant response (later merged with duplicate console timer to 200ms — see Fixed section)
 - Viewport delta tracking with outer dimension stability check (catches mid-session docking)
 - `DevToolsTerminator._status()` diagnostic method — returns current viewport dimensions, `isMobile`, `windowSizeCheck` state and other debug info
-- Repeated `console.log(obj)` every 100ms keeps a live entry in Chrome's ring buffer (was once during init; the single entry could be evicted before DevTools opens)
+- Repeated `console.log(obj)` keeps a live entry in Chrome's ring buffer (was once during init; the single entry could be evicted before DevTools opens; runs at 200ms after merging with viewport timer — see Fixed section)
 
-### Fixed
+### Fixed (0.1.2)
 
 - **Prototype pollution hardening**: rate-limiting `buckets` now use `Object.create(null)` instead of plain objects (`{}`), preventing prototype pollution via crafted IP keys. Session and termination stores migrated to `Map` which is inherently immune to prototype pollution
 - **Payload timestamp replay bypass**: `Number(data.timestamp)` with `isNaN(payloadAge)` guard prevents NaN-based replay window bypass. Previously, a non-numeric timestamp produced `NaN` in `now - data.timestamp`, and `NaN > cfg.replayWindow` is always `false`, allowing expired payloads to pass validation
@@ -672,7 +672,7 @@ For detailed guidelines, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Restored width-docked DevTools detection (was removed due to false positives from sidebar extensions at lower thresholds; 150px threshold avoids narrow extensions while catching all DevTools ≥200px)
 - Height threshold set to 170px to safely clear Firefox power-user chrome (~165px max)
 
-### Changed
+### Changed (0.1.2)
 
 - `blockInteractions` default changed from `true` to `false` — right-click blocking, text selection prevention, and drag protection are now opt-in. Sites behave more naturally unless explicitly configured
 - `clearAllStorage()` gated behind `destructiveClear: true` — storage wiping on termination is now opt-in to prevent accidental data loss. A warning is logged when termination triggers but `destructiveClear` is `false`
@@ -681,7 +681,7 @@ For detailed guidelines, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Server middleware refactored from module-level singleton stores to instance-scoped stores with `instances[]` registry — each `createMiddleware()` call now has fully isolated session and termination stores, preventing cross-instance state leaks when running multiple server instances
 - Server module exposed additional exports: `createSession`, `getSessionStore`, `getTerminatedSessions` — backward compatible, all existing call patterns continue to work
 
-### Removed
+### Removed (0.1.2)
 
 - Legacy `__DEVTOLS_TERMINATOR_CONFIG__` and `__DEVTOLS_TERMINATOR_INITIALIZED__` fallback properties have been completely removed from client files to prevent accidental use of misspelled variables
 - `SEC_DEVTOOLS_FORMAT_005` reason code (format probe function was already removed in an earlier iteration; constant was dead code)

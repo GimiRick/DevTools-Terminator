@@ -19,7 +19,7 @@
 - `DevToolsTerminator._status()` diagnostic method — returns current viewport dimensions, `isMobile`, `windowSizeCheck` state and other debug info
 - Repeated `console.log(obj)` keeps a live entry in Chrome's ring buffer (was once during init; the single entry could be evicted before DevTools opens; runs at 200ms after merging with viewport timer — see Fixed section)
 
-### Fixed
+### Fixed (0.1.2)
 
 - **Prototype pollution hardening**: rate-limiting `buckets` now use `Object.create(null)` instead of plain objects (`{}`), preventing prototype pollution via crafted IP keys. Session and termination stores migrated to `Map` which is inherently immune to prototype pollution
 - **Payload timestamp replay bypass**: `Number(data.timestamp)` with `isNaN(payloadAge)` guard prevents NaN-based replay window bypass. Previously, a non-numeric timestamp produced `NaN` in `now - data.timestamp`, and `NaN > cfg.replayWindow` is always `false`, allowing expired payloads to pass validation
@@ -39,7 +39,7 @@
 - Restored width-docked DevTools detection (was removed due to false positives from sidebar extensions at lower thresholds; 150px threshold avoids narrow extensions while catching all DevTools ≥200px)
 - Height threshold set to 170px to safely clear Firefox power-user chrome (~165px max)
 
-### Changed
+### Changed (0.1.2)
 
 - `blockInteractions` default changed from `true` to `false` — right-click blocking, text selection prevention, and drag protection are now opt-in. Sites behave more naturally unless explicitly configured
 - `clearAllStorage()` gated behind `destructiveClear: true` — storage wiping on termination is now opt-in to prevent accidental data loss. A warning is logged when termination triggers but `destructiveClear` is `false`
@@ -48,7 +48,7 @@
 - Server middleware refactored from module-level singleton stores to instance-scoped stores with `instances[]` registry — each `createMiddleware()` call now has fully isolated session and termination stores, preventing cross-instance state leaks when running multiple server instances
 - Server module exposed additional exports: `createSession`, `getSessionStore`, `getTerminatedSessions` — backward compatible, all existing call patterns continue to work
 
-### Removed
+### Removed (0.1.2)
 
 - Legacy `__DEVTOLS_TERMINATOR_CONFIG__` and `__DEVTOLS_TERMINATOR_INITIALIZED__` fallback properties have been completely removed from client files to prevent accidental use of misspelled variables
 - `SEC_DEVTOOLS_FORMAT_005` reason code (format probe function was already removed in an earlier iteration; constant was dead code)
@@ -66,7 +66,7 @@
 - Mac OS DevTools shortcut interception (`Cmd+Option+I/J/C`) via `e.altKey` check
 - `navigator.sendBeacon` fallback for hybrid heartbeat and termination beacons when `fetch` is unavailable; `fetch({ keepalive: true })` preferred
 
-### Fixed
+### Fixed (0.1.1)
 
 - Server middleware `config`/`logger` no longer shared across middleware instances — each `createMiddleware()` call now has isolated configuration
 - `terminatedSessions` store no longer leaks memory — entries now cleaned up when stale
