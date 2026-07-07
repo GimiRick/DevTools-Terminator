@@ -35,16 +35,20 @@ function createRateLimiter(windowMs, maxHits) {
   var buckets = Object.create(null);
   var lastCleanup = Date.now();
   return function (key) {
-    if (Date.now() - lastCleanup > windowMs) {
-      var cleanupNow = Date.now();
-      for (var k in buckets) {
-        if (Object.prototype.hasOwnProperty.call(buckets, k) && cleanupNow >= buckets[k].resetAt) {
-          delete buckets[k];
+    var now = Date.now();
+    var timeSinceCleanup = now - lastCleanup;
+    if (timeSinceCleanup > windowMs || timeSinceCleanup < 0) {
+      if (timeSinceCleanup < 0) {
+        buckets = Object.create(null);
+      } else {
+        for (var k in buckets) {
+          if (Object.prototype.hasOwnProperty.call(buckets, k) && now >= buckets[k].resetAt) {
+            delete buckets[k];
+          }
         }
       }
-      lastCleanup = cleanupNow;
+      lastCleanup = now;
     }
-    var now = Date.now();
     var bucket = buckets[key];
     if (!bucket || now >= bucket.resetAt) {
       buckets[key] = { count: 1, resetAt: now + windowMs };
@@ -174,48 +178,54 @@ function createMemoryStore(staleThreshold) {
       return false;
     },
     cleanup: function (log) {
+      if (this._cleaning) return;
+      this._cleaning = true;
       var now = Date.now();
       var cleaned = [];
       var count = 0;
       var chunkSize = 5000;
 
-      if (!lastCleanupIterator) {
-        lastCleanupIterator = sessions.entries();
-      }
-
-      var result = lastCleanupIterator.next();
-      while (!result.done && count < chunkSize) {
-        var id = result.value[0];
-        var session = result.value[1];
-        if (terminatedSessions.has(id)) {
-          sessions.delete(id);
-          cleaned.push({ sessionId: id, reason: 'terminated' });
-        } else if (now - session.lastHeartbeat > staleThreshold) {
-          sessions.delete(id);
-          cleaned.push({ sessionId: id, reason: 'stale' });
+      try {
+        if (!lastCleanupIterator) {
+          lastCleanupIterator = sessions.entries();
         }
-        count++;
-        result = lastCleanupIterator.next();
-      }
 
-      if (result.done) {
-        lastCleanupIterator = null; // Reset for next tick
-      }
-
-      for (var tid of terminatedSessions.keys()) {
-        if (now - terminatedSessions.get(tid) > staleThreshold) {
-          terminatedSessions.delete(tid);
+        var result = lastCleanupIterator.next();
+        while (!result.done && count < chunkSize) {
+          var id = result.value[0];
+          var session = result.value[1];
+          if (terminatedSessions.has(id)) {
+            sessions.delete(id);
+            cleaned.push({ sessionId: id, reason: 'terminated' });
+          } else if (now - session.lastHeartbeat > staleThreshold) {
+            sessions.delete(id);
+            cleaned.push({ sessionId: id, reason: 'stale' });
+          }
+          count++;
+          result = lastCleanupIterator.next();
         }
-      }
 
-      for (var blockKey of blockedFingerprints.keys()) {
-        if (now - blockedFingerprints.get(blockKey) > staleThreshold * 2) {
-          blockedFingerprints.delete(blockKey);
+        if (result.done) {
+          lastCleanupIterator = null;
         }
-      }
 
-      if (cleaned.length > 0 && log) {
-        log.debug('sessions_cleaned', { count: cleaned.length, sessions: cleaned });
+        for (var tid of terminatedSessions.keys()) {
+          if (now - terminatedSessions.get(tid) > staleThreshold) {
+            terminatedSessions.delete(tid);
+          }
+        }
+
+        for (var blockKey of blockedFingerprints.keys()) {
+          if (now - blockedFingerprints.get(blockKey) > staleThreshold * 2) {
+            blockedFingerprints.delete(blockKey);
+          }
+        }
+
+        if (cleaned.length > 0 && log) {
+          log.debug('sessions_cleaned', { count: cleaned.length, sessions: cleaned });
+        }
+      } finally {
+        this._cleaning = false;
       }
     },
     _getRawSessions: function() {
@@ -505,14 +515,14 @@ function handleTerminate(req, res, cfg, log, store) {
 module.exports = createMiddleware;
 module.exports.createSession = function (req, res) {
   if (instances.length > 0) {
-    handleCreateSession(req, res, instances[0].store);
+    handleCreateSession(req, res, instances[instances.length - 1].store);
   } else {
     res.status(500).json({ error: 'No middleware instance initialized' });
   }
 };
 module.exports.getSessionStore = function () {
-  return instances.length > 0 ? instances[0].store._getRawSessions() : {};
+  return instances.length > 0 ? instances[instances.length - 1].store._getRawSessions() : {};
 };
 module.exports.getTerminatedSessions = function () {
-  return instances.length > 0 ? instances[0].store._getRawTerminated() : {};
+  return instances.length > 0 ? instances[instances.length - 1].store._getRawTerminated() : {};
 };

@@ -135,15 +135,27 @@
                 document.cookie.split(';').forEach(function(c) {
                     var eqIdx = c.indexOf('=');
                     var name = eqIdx > -1 ? c.substring(0, eqIdx).trim() : c.trim();
-                    if (name) {
-                        document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/';
-                        document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=' + window.location.hostname;
-                        var hostParts = window.location.hostname.split('.');
-                        var domainParts = [];
-                        for (var j = hostParts.length - 1; j >= 0; j--) {
-                            domainParts.unshift(hostParts[j]);
-                            if (domainParts.length >= 2) {
-                                document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=.' + domainParts.join('.');
+                    if (!name) return;
+                    var isSecure = location.protocol === 'https:';
+                    var base = name + '=;expires=' + new Date(0).toUTCString() + ';path=/';
+                    document.cookie = base;
+                    document.cookie = base + ';domain=' + window.location.hostname;
+                    if (isSecure) {
+                        document.cookie = base + ';Secure';
+                        document.cookie = base + ';Secure;domain=' + window.location.hostname;
+                        document.cookie = base + ';SameSite=None;Secure';
+                        document.cookie = base + ';SameSite=None;Secure;domain=' + window.location.hostname;
+                    }
+                    var hostParts = window.location.hostname.split('.');
+                    var domainParts = [];
+                    for (var j = hostParts.length - 1; j >= 0; j--) {
+                        domainParts.unshift(hostParts[j]);
+                        if (domainParts.length >= 2) {
+                            var d = '.' + domainParts.join('.');
+                            document.cookie = base + ';domain=' + d;
+                            if (isSecure) {
+                                document.cookie = base + ';Secure;domain=' + d;
+                                document.cookie = base + ';SameSite=None;Secure;domain=' + d;
                             }
                         }
                     }

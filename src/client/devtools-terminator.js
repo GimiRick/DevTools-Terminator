@@ -1,7 +1,7 @@
 (function (global) {
   'use strict';
 
-  var VERSION = '0.1.2';
+  var VERSION = '0.1.3';
 
   var REASON_CODES = {
     CONSOLE: 'SEC_DEVTOOLS_CONSOLE_001',
@@ -30,8 +30,7 @@
     var mobileUA = /Android|webOS|iPhone|iPod|iPad|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
     var isTouch = typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0;
     var isiPadorIOS = /Macintosh/i.test(ua) && isTouch;
-    var smallScreen = screen.width < 768;
-    return mobileUA || isiPadorIOS || smallScreen;
+    return mobileUA || isiPadorIOS;
   }
 
   function loadConfig() {
@@ -62,50 +61,64 @@
     try { sessionStorage.clear(); } catch (e) {}
     try {
       var cookies = document.cookie.split(';');
+      var isSecure = location.protocol === 'https:';
       for (var i = 0; i < cookies.length; i++) {
         var c = cookies[i];
         var eqIdx = c.indexOf('=');
         var name = eqIdx > -1 ? c.substring(0, eqIdx).trim() : c.trim();
-        if (name) {
-          document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/';
-          document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=' + window.location.hostname;
-          var hostParts = window.location.hostname.split('.');
-          var domainParts = [];
-          for (var j = hostParts.length - 1; j >= 0; j--) {
-            domainParts.unshift(hostParts[j]);
-            if (domainParts.length >= 2) {
-              document.cookie = name + '=;expires=' + new Date(0).toUTCString() + ';path=/;domain=.' + domainParts.join('.');
+        if (!name) continue;
+        var base = name + '=;expires=' + new Date(0).toUTCString() + ';path=/';
+        document.cookie = base;
+        document.cookie = base + ';domain=' + window.location.hostname;
+        if (isSecure) {
+          document.cookie = base + ';Secure';
+          document.cookie = base + ';Secure;domain=' + window.location.hostname;
+          document.cookie = base + ';SameSite=None;Secure';
+          document.cookie = base + ';SameSite=None;Secure;domain=' + window.location.hostname;
+        }
+        var hostParts = window.location.hostname.split('.');
+        var domainParts = [];
+        for (var j = hostParts.length - 1; j >= 0; j--) {
+          domainParts.unshift(hostParts[j]);
+          if (domainParts.length >= 2) {
+            var d = '.' + domainParts.join('.');
+            document.cookie = base + ';domain=' + d;
+            if (isSecure) {
+              document.cookie = base + ';Secure;domain=' + d;
+              document.cookie = base + ';SameSite=None;Secure;domain=' + d;
             }
           }
         }
       }
     } catch (e) {}
+    var p = [];
     try {
       if ('indexedDB' in global) {
         var req = indexedDB.databases();
         if (req && req.then) {
-          req.then(function (dbs) {
+          p.push(req.then(function (dbs) {
             for (var i = 0; i < dbs.length; i++) {
               if (dbs[i].name) indexedDB.deleteDatabase(dbs[i].name);
             }
-          }).catch(function () {});
+          }).catch(function () {}));
         }
       }
     } catch (e) {}
     try {
       if ('caches' in global) {
-        caches.keys().then(function (keys) {
+        p.push(caches.keys().then(function (keys) {
           for (var i = 0; i < keys.length; i++) caches.delete(keys[i]);
-        }).catch(function () {});
+        }).catch(function () {}));
       }
     } catch (e) {}
     try {
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function (regs) {
+        p.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
           for (var i = 0; i < regs.length; i++) regs[i].unregister();
-        }).catch(function () {});
+        }).catch(function () {}));
       }
     } catch (e) {}
+    return Promise.all(p).catch(function () {});
   }
 
   function terminate(reasonCode) {
@@ -122,14 +135,21 @@
       try { cb(reasonCode || REASON_CODES.UNKNOWN); } catch (e) {}
     }
 
-    clearAllStorage();
+    var p = clearAllStorage();
 
-    setTimeout(function() {
+    var nav = function () {
       var url = config.terminationURL;
       if (url) {
         global.location.replace(url);
       }
-    }, 100);
+    };
+
+    if (p && typeof p.then === 'function') {
+      p.then(nav).catch(nav);
+      setTimeout(nav, 1000);
+    } else {
+      setTimeout(nav, 100);
+    }
   }
 
   function startDetection() {

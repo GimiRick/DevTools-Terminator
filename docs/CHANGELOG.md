@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.3] — 2026-07-07
+
+### Fixed (0.1.3)
+
+- **Secure cookie deletion across origins**: Cookie removal now writes `;Secure` and `;SameSite=None;Secure` cookie variants in addition to the bare cookie. When the page is served over HTTPS, cookies set with `SameSite=None;Secure` from the original origin would not be cleared by a bare `document.cookie = ""` overwrite — only a matching cookie with the identical `Secure` flag can override it. Applied in both standalone and hybrid clients, and `terminated.html`.
+- **Async storage wipe race**: `clearAllStorage()` now returns `Promise.all(p)` and `terminate()` awaits the returned promise with a 1,000ms safety timeout. Previously, IndexedDB, CacheStorage, and service worker unregistration (all async) would continue after the response was sent, and `terminate()` returned before these operations completed.
+- **Cookie cleanup async gap**: Cookie clearing now uses batch deletion (all domain/label variants) before the async wipe Promise chain, ensuring cookies are cleared synchronously even if the subsequent async wipe takes time.
+- **Session ID leaked in URL query params**: `sendHeartbeat()` and `sendTerminationBeacon()` now only append `?session=` when using `navigator.sendBeacon` (which cannot send custom headers). Fetch calls use the `X-Session-ID` header exclusively, preventing session IDs from appearing in server access logs, proxy logs, referrer headers, and browser history.
+- **Fetch options mutation**: `fetchWithTimeout()` now shallow-clones the `options` parameter before passing it to `fetch()`, preventing the caller's original options object from having `signal` injected onto it.
+- **Mobile false positive removal**: Removed `screen.width < 768` from `isMobile()`. On desktop browsers with narrow viewports (e.g., windowed mode, ultrawide monitors with snapped windows), `screen.width` reports the physical screen width — not the viewport — so this condition was never true on desktop and added zero value. Its presence created confusion during debugging.
+- **Rate limiter clock drift vulnerability**: `createRateLimiter()` now checks for backward clock drift (`timeSinceCleanup < 0`) in addition to the forward stale-window check. When backward drift is detected, all rate-limit buckets are cleared unconditionally (not only those past their `resetAt`), preventing stale buckets from falsely rate-limiting users for up to `windowMs` after a clock jump. On forward drift, normal expired-bucket cleanup still applies.
+- **Cleanup re-entry guard hardening**: `cleanup()` in `createMemoryStore()` now wraps its body in `try/finally`, ensuring `this._cleaning` is always reset to `false` even if an exception is thrown during cleanup iteration.
+- **Instance export targeting**: Static `module.exports` methods (`createSession`, `getSessionStore`, `getTerminatedSessions`) now target `instances[instances.length - 1]` (the latest initialized instance) instead of `instances[0]`. In multi-instance setups, the first initialized instance might already be stale or decommissioned.
+
 ## [0.1.2] — 2026-07-07
 
 ### Added (0.1.2)
