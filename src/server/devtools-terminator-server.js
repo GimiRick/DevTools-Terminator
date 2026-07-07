@@ -159,7 +159,7 @@ function createMiddleware(userConfig) {
   });
 
   return function (req, res, next) {
-    var path = req.path || req.url;
+    var path = req.path;
     var ip = req.ip || req.socket.remoteAddress;
 
     if (path === '/heartbeat' && req.method === 'POST') {
@@ -239,7 +239,7 @@ function handleHeartbeat(req, res, cfg, log) {
     if (aborted) return;
     try {
       var data = JSON.parse(body);
-      var sessionId = extractSessionId(req) || data.sessionId || 'anonymous';
+      var sessionId = extractSessionId(req) || data.sessionId || generateSessionId();
 
       if (!data.fingerprint || !data.timestamp || !data.signature) {
         return res.status(400).json({ error: 'Missing required fields' });
@@ -328,7 +328,7 @@ function handleTerminate(req, res, cfg, log) {
     if (aborted) return;
     try {
       var data = JSON.parse(body);
-      var sessionId = extractSessionId(req) || data.sessionId || 'anonymous';
+      var sessionId = extractSessionId(req) || data.sessionId || generateSessionId();
 
       if (!data.fingerprint || !data.timestamp || !data.signature) {
         return res.status(400).json({ error: 'Missing required fields' });

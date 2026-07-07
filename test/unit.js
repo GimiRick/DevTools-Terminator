@@ -80,13 +80,10 @@ console.log('::endgroup::');
 console.log('::group::Server module - validateConfig');
 
 // Test defaults
-var defaultCfg = serverMod.createSession && (function () {
-  var cfgPath = path.join(ROOT, 'src', 'server', 'devtools-terminator-server.js');
-  var code = fs.readFileSync(cfgPath, 'utf-8');
-  // Check that DEFAULT_SECRET constant is preserved
-  return code.indexOf('change-this-to-a-random-secret') !== -1;
-})();
-assert(defaultCfg, 'server source contains default secret placeholder');
+var cfgPath = path.join(ROOT, 'src', 'server', 'devtools-terminator-server.js');
+var code = fs.readFileSync(cfgPath, 'utf-8');
+// Check that DEFAULT_SECRET constant is preserved
+assert(code.indexOf('change-this-to-a-random-secret') !== -1, 'server source contains default secret placeholder');
 
 // Test that the server module has all expected functions
 assert(typeof serverMod === 'function', 'server exports a function (middleware factory)');

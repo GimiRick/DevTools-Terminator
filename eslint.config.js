@@ -6,10 +6,21 @@ const sharedRules = {
   indent: ['error', 2, { SwitchCase: 1 }],
   'comma-dangle': ['error', 'never'],
   'no-var': 'off',
+  'no-restricted-syntax': [
+    'error',
+    {
+      selector: 'VariableDeclaration[kind="let"]',
+      message: 'Unexpected let, use var instead.'
+    },
+    {
+      selector: 'VariableDeclaration[kind="const"]',
+      message: 'Unexpected const, use var instead.'
+    }
+  ],
   'no-eval': 'error',
   'no-new-func': 'error',
   'no-global-assign': 'error',
-  'no-unused-vars': ['warn', { args: 'none' }],
+  'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }],
   'no-undef': 'error',
   'no-trailing-spaces': 'error',
   'eol-last': ['error', 'always']

@@ -409,6 +409,11 @@
     keyboardInterception();
     consoleDetection();
     viewportDetection();
+
+    if (config.hybridMode && !isSecureContext()) {
+      console.warn('[DevToolsTerminator] Hybrid mode requires a secure context (HTTPS). Heartbeats will not function.');
+    }
+
     fetchSessionId().then(function () {
       startHeartbeat();
     });
