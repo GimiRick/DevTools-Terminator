@@ -27,7 +27,7 @@
     "test": "node test/smoke.js && node test/unit.js"
   },
   "devDependencies": {
-    "eslint": "^10.6.0",
+    "eslint": "^10.12.0",
     "globals": "^17.7.0"
   },
   "dependencies": {
